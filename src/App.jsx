@@ -1,121 +1,72 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import TopBar from './ui/components/toolbar/TopBar'
+import Sidebar from './ui/components/sidebar/Sidebar'
+import SimCanvas from './ui/components/canvas/SimCanvas'
+import PropsPanel from './ui/components/panels/PropsPanel'
+import { useAppStore } from './store/useAppStore'
+import { useSimStore } from './store/useSimStore'
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const { sidebarOpen, propsPanelOpen } = useAppStore()
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100vh',
+      background: 'var(--lb-bg)',
+      overflow: 'hidden',
+    }}>
+      <TopBar />
 
-      <div className="ticks"></div>
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        {sidebarOpen && <Sidebar />}
+        <SimCanvas />
+        {propsPanelOpen && <PropsPanel />}
+      </div>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      <StatusBar />
+    </div>
   )
 }
 
-export default App
+function StatusBar() {
+  const { mode, zoom } = useAppStore()
+  const { components, isRunning } = useSimStore()
+
+  return (
+    <div style={{
+      height: 26,
+      background: 'var(--lb-panel)',
+      borderTop: '1px solid var(--lb-border)',
+      display: 'flex',
+      alignItems: 'center',
+      padding: '0 14px',
+      gap: 16,
+      fontSize: 10,
+      color: 'var(--lb-muted)',
+      flexShrink: 0,
+    }}>
+      <StatusItem dot={isRunning ? 'var(--lb-success)' : 'var(--lb-muted)'}>
+        {isRunning ? 'Simulation active' : 'En pause'}
+      </StatusItem>
+      <StatusItem dot="var(--lb-accent)">Mode : {mode}</StatusItem>
+      <StatusItem>Zoom : {Math.round(zoom * 100)}%</StatusItem>
+      <StatusItem>{components.length} composants</StatusItem>
+      <div style={{ marginLeft: 'auto', display: 'flex', gap: 16 }}>
+        <StatusItem dot="var(--lb-success)">Offline ready</StatusItem>
+        <StatusItem dot="var(--lb-accent2)">.lux v1.0</StatusItem>
+      </div>
+    </div>
+  )
+}
+
+function StatusItem({ dot, children }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+      {dot && <div style={{
+        width: 5, height: 5, borderRadius: '50%', background: dot
+      }}/>}
+      {children}
+    </div>
+  )
+}
