@@ -50,7 +50,7 @@ export const useSimStore = create((set, get) => ({
   isRunning: false,
   results: {},
   setResults: (res) => set({ results: res }),
-
+  setComponents: (comps) => set({ components: comps }),
   // Ajouter un composant
   addComponent: (comp) => set((s) => ({
     components: [...s.components, { ...comp, id: `${comp.type}-${Date.now()}` }]

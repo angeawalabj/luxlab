@@ -31,4 +31,7 @@ export const useAppStore = create((set) => ({
   // Zoom canvas
   zoom: 1,
   setZoom: (z) => set({ zoom: Math.min(Math.max(z, 0.2), 4) }),
+
+  collabSession: null,
+  setCollabSession: (s) => set({ collabSession: s }),
 }))
