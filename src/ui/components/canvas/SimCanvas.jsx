@@ -62,7 +62,9 @@ export default function SimCanvas() {
     ctx.clearRect(0, 0, cvs.width, cvs.height)
     if (!isRunning) return
 
+
     const res = traceRays(components)
+    setResults(res)
 
     // Rayons
     for (const ray of res.rays) {
