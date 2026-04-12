@@ -1,5 +1,6 @@
 import { useAppStore } from '../../../store/useAppStore'
 import { useSimStore } from '../../../store/useSimStore'
+import { exportLux, importLux } from '../../../core/formats/lux'
 
 const MODES = [
   { id: 'etudiant', label: 'Étudiant' },
@@ -16,6 +17,22 @@ const COLLABORATORS = [
 export default function TopBar() {
   const { mode, setMode, toggleCollab } = useAppStore()
   const { isRunning, toggleSim } = useSimStore()
+  const { components, addComponent } = useSimStore()
+
+const handleExport = () => exportLux(components, { title: 'Mon projet LuxLab' })
+
+const handleImport = () => {
+  const input = document.createElement('input')
+  input.type  = 'file'
+  input.accept = '.lux,.json'
+  input.onchange = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    const doc = await importLux(file)
+    doc.components.forEach(c => addComponent(c))
+  }
+  input.click()
+}
 
   return (
     <div style={{
@@ -74,7 +91,8 @@ export default function TopBar() {
         </div>
 
         <TbBtn onClick={toggleCollab}>⟳ Collab</TbBtn>
-        <TbBtn>⬇ Export</TbBtn>
+        <TbBtn onClick={handleImport}>⬆ Import</TbBtn>
+        <TbBtn onClick={handleExport}>⬇ Export</TbBtn>
         <TbBtn
           onClick={toggleSim}
           style={{

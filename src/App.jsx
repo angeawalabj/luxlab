@@ -1,8 +1,9 @@
-import { useSimStore } from './store/useSimStore'
 import TopBar from './ui/components/toolbar/TopBar'
 import Sidebar from './ui/components/sidebar/Sidebar'
 import SimCanvas from './ui/components/canvas/SimCanvas'
 import PropsPanel from './ui/components/panels/PropsPanel'
+import { useAppStore } from './store/useAppStore'
+import { useSimStore } from './store/useSimStore'
 
 export default function App() {
   const { sidebarOpen, propsPanelOpen } = useAppStore()

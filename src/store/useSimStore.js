@@ -49,6 +49,7 @@ export const useSimStore = create((set, get) => ({
   connections: [],
   isRunning: false,
   results: {},
+  setResults: (res) => set({ results: res }),
 
   // Ajouter un composant
   addComponent: (comp) => set((s) => ({
