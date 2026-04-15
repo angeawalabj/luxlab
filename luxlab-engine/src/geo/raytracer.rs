@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::geo::optics::{refractive_index, prism_deviation_chromatic};
+use crate::geo::optics::prism_deviation_chromatic;
 
 // ─── Types d'entrée ──────────────────────────────────────────────
 
@@ -13,7 +13,7 @@ pub struct Component {
     pub params: serde_json::Value,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Default)]
 pub struct TraceOptions {
     #[serde(rename = "numRays", default = "default_num_rays")]
     pub num_rays:   u32,

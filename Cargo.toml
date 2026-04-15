@@ -1,0 +1,3 @@
+[workspace]
+members = ["luxlab-engine"]
+resolver = "2"

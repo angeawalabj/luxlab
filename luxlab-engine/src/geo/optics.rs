@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 
 /// Indice de réfraction d'un matériau à une longueur d'onde donnée
 /// Modèle de Cauchy simplifié : n(λ) = A + B/λ²

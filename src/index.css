@@ -1,43 +1,69 @@
 @import "tailwindcss";
 
 :root {
-  --lb-bg:       #0a0e1a;
-  --lb-surface:  #111827;
-  --lb-panel:    #0f1623;
-  --lb-border:   #1e2d45;
-  --lb-accent:   #00c9ff;
-  --lb-accent2:  #7c3aed;
-  --lb-accent3:  #f59e0b;
-  --lb-text:     #e2e8f0;
-  --lb-muted:    #64748b;
-  --lb-success:  #10b981;
-  --lb-danger:   #ef4444;
+  /* Palette principale — inspirée du logo */
+  --lb-bg:        #f8f9fa;      /* fond très légèrement grisé */
+  --lb-surface:   #ffffff;      /* surfaces des panneaux */
+  --lb-panel:     #ffffff;
+  --lb-border:    #e8eaed;      /* bordures légères */
+  --lb-border-md: #d0d4d9;      /* bordures moyennes */
 
-  /* couleurs par module */
-  --lb-geo:   #f59e0b;
-  --lb-wave:  #06b6d4;
-  --lb-quant: #7c3aed;
-  --lb-nuc:   #ef4444;
-  --lb-spec:  #10b981;
-  --lb-em:    #f97316;
+  /* Texte */
+  --lb-text:      #2c3e50;      /* couleur primaire du logo */
+  --lb-muted:     #7f8c8d;      /* gris moyen */
+  --lb-hint:      #bdc3c7;      /* très discret */
+
+  /* Accents */
+  --lb-accent:    #2c3e50;      /* même que le texte — sobre */
+  --lb-accent-hl: #3498db;      /* bleu pour hover/sélection */
+  --lb-success:   #27ae60;
+  --lb-warning:   #f39c12;
+  --lb-danger:    #e74c3c;
+
+  /* Couleurs physiques par module */
+  --lb-geo:    #e67e22;   /* orange chaud */
+  --lb-wave:   #2980b9;   /* bleu */
+  --lb-quant:  #8e44ad;   /* violet */
+  --lb-nuc:    #c0392b;   /* rouge */
+  --lb-spec:   #16a085;   /* vert-cyan */
+  --lb-em:     #d35400;   /* orange foncé */
+
+  /* Typographie */
+  --font-ui:   'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  --font-mono: 'Courier New', Courier, monospace;
+
+  /* Layout */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
 }
 
-* {
+/* Reset */
+*, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   background: var(--lb-bg);
   color: var(--lb-text);
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-family: var(--font-ui);
   font-size: 13px;
-  overflow: hidden;
-  height: 100vh;
+  line-height: 1.5;
 }
 
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: var(--lb-panel); }
-::-webkit-scrollbar-thumb { background: var(--lb-border); border-radius: 2px; }
+/* Scrollbar discrète */
+::-webkit-scrollbar       { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--lb-border-md); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--lb-muted); }
+
+/* Sélection */
+::selection { background: #3498db33; color: var(--lb-text); }
