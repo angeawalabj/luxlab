@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.agent/*
+
+# Rust
+/luxlab-engine/target/
+/public/wasm/

@@ -1,0 +1,18 @@
+[package]
+name = "luxlab-engine"
+version = "0.1.0"
+edition = "2021"
+description = "LuxLab physics engine — compiled to WebAssembly"
+authors = ["LuxLab"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
