@@ -3,18 +3,18 @@ import init, {
   wavelength_to_color,
   photon_energy_ev,
   engine_version,
-} from '/wasm/luxlab_engine.js'
+} from '../wasm/luxlab_engine.js'
 
 // ─── État du Worker ───────────────────────────────────────────────
 
-let ready       = false
-let currentId   = null   // ID du calcul en cours
+let ready      = false
+let currentId  = null
 
 // ─── Initialisation WASM ─────────────────────────────────────────
 
 async function initialize() {
   try {
-    await init('/wasm/luxlab_engine_bg.wasm')
+    await init()
     ready = true
     self.postMessage({ type: 'READY', version: engine_version() })
   } catch (err) {
@@ -33,24 +33,19 @@ self.onmessage = async ({ data }) => {
 
   switch (data.type) {
 
-    // Lancer une simulation
     case 'RUN': {
       currentId = data.id
-
       try {
         const t0     = performance.now()
-        const input  = JSON.stringify({
+        const output = run_simulation(JSON.stringify({
           components: data.components,
           options:    data.options || {},
-        })
-        const output = run_simulation(input)
+        }))
         const result = JSON.parse(output)
         const ms     = performance.now() - t0
 
-        // Si un nouveau calcul a démarré entre temps → ignorer ce résultat
         if (data.id !== currentId) break
 
-        // Résultat valide
         if (result.error) {
           self.postMessage({ type: 'ERROR', id: data.id, ...result })
         } else {
@@ -72,25 +67,26 @@ self.onmessage = async ({ data }) => {
       break
     }
 
-    // Couleur d'une longueur d'onde
     case 'WAVELENGTH_COLOR': {
       try {
         const color = JSON.parse(wavelength_to_color(data.wl))
-        self.postMessage({ type: 'WAVELENGTH_COLOR_RESULT', id: data.id, color })
+        self.postMessage({
+          type:  'WAVELENGTH_COLOR_RESULT',
+          id:    data.id,
+          color,
+        })
       } catch (err) {
         self.postMessage({ type: 'ERROR', id: data.id, error: err.message })
       }
       break
     }
 
-    // Énergie d'un photon
     case 'PHOTON_ENERGY': {
       const ev = photon_energy_ev(data.wl)
       self.postMessage({ type: 'PHOTON_ENERGY_RESULT', id: data.id, ev })
       break
     }
 
-    // Ping de vérification
     case 'PING': {
       self.postMessage({ type: 'PONG', ready, version: engine_version() })
       break
@@ -105,5 +101,4 @@ self.onmessage = async ({ data }) => {
   }
 }
 
-// Initialiser immédiatement au chargement du Worker
 initialize()
