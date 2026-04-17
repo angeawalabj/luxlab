@@ -33,40 +33,39 @@ self.onmessage = async ({ data }) => {
 
   switch (data.type) {
 
-    case 'RUN': {
-      currentId = data.id
-      try {
-        const t0     = performance.now()
-        const output = run_simulation(JSON.stringify({
-          components: data.components,
-          options:    data.options || {},
-        }))
-        const result = JSON.parse(output)
-        const ms     = performance.now() - t0
+case 'RUN': {
+  currentId = data.id
+  try {
+    const t0     = performance.now()
+    const output = run_simulation(JSON.stringify({
+      components: data.components,
+      options:    data.options || {},
+    }))
+    const result     = JSON.parse(output)
+    const durationMs = performance.now() - t0
 
-        if (data.id !== currentId) break
+    if (data.id !== currentId) break
 
-        if (result.error) {
-          self.postMessage({ type: 'ERROR', id: data.id, ...result })
-        } else {
-          self.postMessage({
-            type:       'RESULT',
-            id:         data.id,
-            result,
-            durationMs: ms,
-          })
-        }
-      } catch (err) {
-        self.postMessage({
-          type:  'ERROR',
-          id:    data.id,
-          code:  'SIMULATION_FAILED',
-          error: err.message,
-        })
-      }
-      break
+    if (result.error) {
+      self.postMessage({ type: 'ERROR', id: data.id, ...result })
+    } else {
+      // On ajoute durationMs ici côté JS
+      self.postMessage({
+        type:   'RESULT',
+        id:     data.id,
+        result: { ...result, durationMs },
+      })
     }
-
+  } catch (err) {
+    self.postMessage({
+      type:  'ERROR',
+      id:    data.id,
+      code:  'SIMULATION_FAILED',
+      error: err.message,
+    })
+  }
+  break
+}
     case 'WAVELENGTH_COLOR': {
       try {
         const color = JSON.parse(wavelength_to_color(data.wl))

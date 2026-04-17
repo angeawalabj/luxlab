@@ -10,4 +10,9 @@ export default defineConfig({
   worker: {
     format: 'es',
   },
+  // Expose le dossier public/wasm sans transformation
+  assetsInclude: ['**/*.wasm'],
+  optimizeDeps: {
+    exclude: ['luxlab-engine'],
+  },
 })

@@ -3,7 +3,7 @@ use crate::geo::optics::prism_deviation_chromatic;
 
 // ─── Types d'entrée ──────────────────────────────────────────────
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Default)]
 pub struct Component {
     pub id:     String,
     #[serde(rename = "type")]
@@ -63,45 +63,37 @@ pub struct TraceResult {
     pub rays:          Vec<Ray>,
     pub intersections: Vec<Intersection>,
     pub images:        Vec<ConjugateImage>,
-    #[serde(rename = "durationMs")]
-    pub duration_ms:   f64,
 }
 
 // ─── Moteur principal ─────────────────────────────────────────────
 
 pub fn trace(components: &[Component], opts: &TraceOptions) -> TraceResult {
-    let start = std::time::Instant::now();
-
     let mut result = TraceResult {
         rays:          Vec::new(),
         intersections: Vec::new(),
         images:        Vec::new(),
-        duration_ms:   0.0,
     };
 
     let source = components.iter().find(|c| c.kind == "source");
     let source = match source {
         Some(s) => s,
-        None    => {
-            result.duration_ms = start.elapsed().as_secs_f64() * 1000.0;
-            return result;
-        }
+        None    => return result,
     };
 
     let wl = source.params["wavelength"].as_f64().unwrap_or(550.0);
 
-    // Obstacles triés par position X, après la source
     let mut obstacles: Vec<&Component> = components
         .iter()
         .filter(|c| {
-            matches!(c.kind.as_str(), "lens"|"mirror"|"prism"|"screen"|"blocker")
-            && c.x > source.x
+            matches!(
+                c.kind.as_str(),
+                "lens" | "mirror" | "prism" | "screen" | "blocker"
+            ) && c.x > source.x
         })
         .collect();
     obstacles.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap());
 
-    // Tracé de num_rays rayons
-    let n = opts.num_rays as i32;
+    let n      = opts.num_rays as i32;
     let spread = 60.0_f64;
 
     for i in 0..n {
@@ -114,17 +106,15 @@ pub fn trace(components: &[Component], opts: &TraceOptions) -> TraceResult {
         let ray = trace_single_ray(
             source.x + 25.0,
             source.y + offset,
-            0.0_f64,
+            0.0,
             wl,
             &obstacles,
             opts,
             &mut result.intersections,
         );
-
         result.rays.push(ray);
     }
 
-    // Calcul des images conjuguées
     let lenses: Vec<&Component> = obstacles
         .iter()
         .filter(|c| c.kind == "lens")
@@ -132,14 +122,9 @@ pub fn trace(components: &[Component], opts: &TraceOptions) -> TraceResult {
         .collect();
 
     if !lenses.is_empty() {
-        compute_conjugate_images(
-            source,
-            &lenses,
-            &mut result.images,
-        );
+        compute_conjugate_images(source, &lenses, &mut result.images);
     }
 
-    result.duration_ms = start.elapsed().as_secs_f64() * 1000.0;
     result
 }
 
@@ -163,7 +148,6 @@ fn trace_single_ray(
         if !alive { break }
         if obs.x <= x { continue }
 
-        // Avancer jusqu'à l'obstacle
         let dx = obs.x - x;
         y = y + dx * angle.tan();
         x = obs.x;
@@ -214,8 +198,7 @@ fn trace_single_ray(
 
             "blocker" => {
                 let height = obs.params["height"].as_f64().unwrap_or(60.0);
-                let dy = (y - obs.y).abs();
-                if dy < height / 2.0 {
+                if (y - obs.y).abs() < height / 2.0 {
                     alive = false;
                     intersections.push(Intersection {
                         x, y, kind: "blocked".to_string()
@@ -227,7 +210,6 @@ fn trace_single_ray(
         }
     }
 
-    // Prolonger le rayon jusqu'au bord si encore vivant
     if alive {
         let x_end = opts.ray_length;
         let y_end = y + (x_end - x) * angle.tan();
@@ -240,9 +222,9 @@ fn trace_single_ray(
 // ─── Images conjuguées ───────────────────────────────────────────
 
 fn compute_conjugate_images(
-    source:   &Component,
-    lenses:   &[&Component],
-    images:   &mut Vec<ConjugateImage>,
+    source: &Component,
+    lenses: &[&Component],
+    images: &mut Vec<ConjugateImage>,
 ) {
     let mut x_obj = source.x;
     let mut y_obj = source.y;
@@ -252,7 +234,7 @@ fn compute_conjugate_images(
         let d = lens.x - x_obj;
 
         if d.abs() < 1e-10 || (d - f).abs() < 1e-10 {
-            continue; // éviter division par zéro
+            continue;
         }
 
         let d_img = (d * f) / (d - f);
@@ -261,11 +243,11 @@ fn compute_conjugate_images(
         let y_img = lens.y + m * (y_obj - lens.y);
 
         images.push(ConjugateImage {
-            x:             x_img,
-            y:             y_img,
+            x: x_img,
+            y: y_img,
             magnification: m,
-            real:          d_img > 0.0,
-            from_lens:     lens.id.clone(),
+            real: d_img > 0.0,
+            from_lens: lens.id.clone(),
         });
 
         x_obj = x_img;

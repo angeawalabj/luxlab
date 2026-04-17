@@ -8,7 +8,7 @@ class SimulationBridge {
   #pending     = new Map()   // id → { resolve, reject, timestamp }
   #listeners   = new Set()   // pour les mises à jour de statut
   #msgCounter  = 0
-
+  #version = 'unknown'
   constructor() {
     this.#initWorker()
   }
@@ -35,7 +35,8 @@ class SimulationBridge {
     switch (data.type) {
 
       case 'READY':
-        this.#ready = true
+        this.#ready   = true
+        this.#version = data.version
         this.#emit('ready', { version: data.version })
         break
 
@@ -118,12 +119,17 @@ class SimulationBridge {
 
   // ─── Observers ───────────────────────────────────────────────────
 
-  on(event, fn) {
-    this.#listeners.add({ event, fn })
-    return () => this.#listeners.forEach(l => {
-      if (l.fn === fn) this.#listeners.delete(l)
-    })
+on(event, fn) {
+  const listener = { event, fn }
+  this.#listeners.add(listener)
+
+  // Si on écoute 'ready' et que le Worker est déjà prêt → déclencher immédiatement
+  if (event === 'ready' && this.#ready) {
+    fn({ version: this.#version })
   }
+
+  return () => this.#listeners.delete(listener)
+}
 
   #emit(event, data) {
     this.#listeners.forEach(l => {
