@@ -1,37 +1,37 @@
 import { create } from 'zustand'
 
 export const useAppStore = create((set) => ({
-  // Mode actif
-  mode: 'pro', // 'etudiant' | 'pro' | 'recherche' | 'tp'
-  setMode: (mode) => set({ mode }),
 
-  // Modules physiques activés
-  activeModules: ['geo', 'wave'],
-  toggleModule: (mod) => set((s) => ({
-    activeModules: s.activeModules.includes(mod)
-      ? s.activeModules.filter(m => m !== mod)
-      : [...s.activeModules, mod]
-  })),
+  // ─── UI ──────────────────────────────────────────────────────────
+  sidebarOpen:     true,
+  propsPanelOpen:  true,
+  resultsPanelOpen:true,
+  focusMode:       false,
 
-  // Sidebar
-  sidebarOpen: true,
-  toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
+  toggleSidebar:      () => set(s => ({ sidebarOpen:      !s.sidebarOpen })),
+  togglePropsPanel:   () => set(s => ({ propsPanelOpen:   !s.propsPanelOpen })),
+  toggleResultsPanel: () => set(s => ({ resultsPanelOpen: !s.resultsPanelOpen })),
+  toggleFocusMode:    () => set(s => ({ focusMode:        !s.focusMode })),
 
-  // Panneau propriétés
-  propsPanelOpen: true,
+  // ─── Canvas ──────────────────────────────────────────────────────
+  zoom: 1.0,
+  pan:  { x: 0, y: 0 },
 
-  // Composant sélectionné
+  setZoom: (z) => set({ zoom: Math.min(Math.max(z, 0.2), 4.0) }),
+  setPan:  (p) => set({ pan: p }),
+
+  // ─── Paramètres simulation ───────────────────────────────────────
+  fidelity:      'standard',   // fast | standard | precise | max
+  activePlugins: [],
+
+  setFidelity:      (f)    => set({ fidelity: f }),
+  setActivePlugins: (list) => set({ activePlugins: list }),
+
+  // ─── Sélection composant ─────────────────────────────────────────
   selectedComponentId: null,
   setSelectedComponent: (id) => set({ selectedComponentId: id }),
 
-  // Collaboration
+  // ─── Collaboration ───────────────────────────────────────────────
   collabOpen: false,
-  toggleCollab: () => set((s) => ({ collabOpen: !s.collabOpen })),
-
-  // Zoom canvas
-  zoom: 1,
-  setZoom: (z) => set({ zoom: Math.min(Math.max(z, 0.2), 4) }),
-
-  collabSession: null,
-  setCollabSession: (s) => set({ collabSession: s }),
+  toggleCollab: () => set(s => ({ collabOpen: !s.collabOpen })),
 }))
