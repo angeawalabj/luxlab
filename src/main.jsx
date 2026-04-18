@@ -3,73 +3,67 @@ import { createRoot }                       from 'react-dom/client'
 import './index.css'
 import SplashScreen                         from './ui/SplashScreen'
 import { bridge }                           from './core/SimulationBridge'
+import { loadAll }                          from './core/loader/pluginLoader'
+import { registry }                         from './core/plugin-api'
 
-// ─── Test moteur — lancé une seule fois, hors React ──────────────
+async function bootstrap() {
+  // 1. Charger les plugins
+  await loadAll()
 
-if (import.meta.env.DEV) {
-  bridge.on('ready', async ({ version }) => {
-    console.log(`✓ Worker prêt — moteur v${version}`)
+  // 2. Test en dev
+  if (import.meta.env.DEV) {
+    console.group('[LuxLab] Tests bootstrap')
 
-    try {
+    // Registry
+    const comps = registry.getAllComponents()
+    console.log(`✓ ${comps.length} composants enregistrés :`,
+      comps.map(c => c.type).join(', '))
+
+    const engine = registry.getEngineFor([{ type: 'source' }])
+    console.log(`✓ Moteur trouvé :`, engine?.id)
+
+    const templates = registry.getAllTemplates()
+    console.log(`✓ ${templates.length} templates :`,
+      templates.map(t => t.title).join(', '))
+
+    const exps = registry.getAllExperiences()
+    console.log(`✓ ${exps.length} expériences :`,
+      exps.map(e => e.title).join(', '))
+
+    // Worker
+    bridge.on('ready', async ({ version }) => {
+      console.log(`✓ Moteur WASM v${version} prêt`)
+
       const result = await bridge.runSimulation([
-        {
-          id: 'src-1', type: 'source',
-          x: 80, y: 220,
-          params: { wavelength: 550, intensity: 1.0 }
-        },
-        {
-          id: 'lens-1', type: 'lens',
-          x: 280, y: 220,
-          params: { focalLength: 50, diameter: 40, material: 'BK7' }
-        },
-        {
-          id: 'screen-1', type: 'screen',
-          x: 520, y: 220,
-          params: { height: 80 }
-        },
+        { id:'src-1', type:'source', x:80,  y:220,
+          params:{ wavelength:550, intensity:1.0 } },
+        { id:'l-1',   type:'lens',   x:280, y:220,
+          params:{ focalLength:50, material:'BK7' } },
+        { id:'scr-1', type:'screen', x:520, y:220,
+          params:{ height:80 } },
       ], { numRays: 7 })
 
-      console.log(
-        `✓ Simulation OK — ${result.rays.length} rayons` +
-        ` en ${result.durationMs?.toFixed(1)}ms`
-      )
-      console.log(`✓ Images conjuguées : ${result.images.length}`)
+      console.log(`✓ Simulation : ${result.rays?.length} rayons,`,
+        `${result.images?.length} image(s) conjuguée(s)`)
 
-      if (result.images[0]) {
-        const img = result.images[0]
-        console.log(
-          `  → m = ${img.magnification.toFixed(3)},` +
-          ` réelle = ${img.real}`
-        )
-      }
+      console.groupEnd()
+    })
+  }
 
-      const color = await bridge.getWavelengthColor(632)
-      console.log(`✓ λ=632nm → rgb(${
-        Math.round(color.r * 255)},${
-        Math.round(color.g * 255)},${
-        Math.round(color.b * 255)})`
-      )
-
-    } catch (err) {
-      console.error('✗ Test échoué:', err.message)
-    }
-  })
+  // 3. Monter React
+  createRoot(document.getElementById('root')).render(
+    <StrictMode><AppRoot /></StrictMode>
+  )
 }
 
-// ─── App ──────────────────────────────────────────────────────────
-
-function App() {
-  const [splashDone,    setSplashDone]    = useState(false)
-  const [engineStatus,  setEngineStatus]  = useState('initialisation...')
+function AppRoot() {
+  const [splashDone, setSplashDone] = useState(false)
+  const [status, setStatus]         = useState('initialisation...')
 
   useEffect(() => {
-    const offReady = bridge.on('ready', ({ version }) =>
-      setEngineStatus(`moteur v${version} prêt`)
+    bridge.on('ready', ({ version }) =>
+      setStatus(`moteur v${version} — ${registry.getAllComponents().length} composants`)
     )
-    const offError = bridge.on('error', ({ error }) =>
-      setEngineStatus(`erreur : ${error}`)
-    )
-    return () => { offReady(); offError() }
   }, [])
 
   return (
@@ -78,28 +72,24 @@ function App() {
         <SplashScreen onDone={() => setSplashDone(true)} />
       )}
       {splashDone && (
-        <div style={{
-          padding: '32px',
-          color: 'var(--lb-text)',
-          fontFamily: 'var(--font-ui)',
-        }}>
-          <h2 style={{ marginBottom: 12 }}>LuxLab</h2>
+        <div style={{ padding: 32, color: 'var(--lb-text)' }}>
+          <div style={{
+            fontSize: 18, fontWeight: 700,
+            marginBottom: 8,
+          }}>
+            LuxLab
+          </div>
           <code style={{
             fontFamily: 'var(--font-mono)',
-            fontSize: 12,
+            fontSize: 11,
             color: 'var(--lb-muted)',
           }}>
-            {'>'} {engineStatus}
+            {'>'} {status}
           </code>
-          <p style={{ marginTop: 24, fontSize: 12, color: 'var(--lb-hint)' }}>
-            Ouvre la console (F12) pour voir les résultats du test moteur.
-          </p>
         </div>
       )}
     </>
   )
 }
 
-createRoot(document.getElementById('root')).render(
-  <StrictMode><App /></StrictMode>
-)
+bootstrap()
