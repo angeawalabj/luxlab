@@ -1,37 +1,34 @@
 import { create } from 'zustand'
 
-export const useAppStore = create((set) => ({
+export const useAppStore = create((set, get) => ({
 
-  // ─── UI ──────────────────────────────────────────────────────────
-  sidebarOpen:     true,
-  propsPanelOpen:  true,
-  resultsPanelOpen:true,
-  focusMode:       false,
+  // ─── Panneaux ────────────────────────────────────────────────────
+  sidebarOpen:      true,
+  propsPanelOpen:   true,
+  resultsPanelOpen: true,
+  focusMode:        false,
 
-  toggleSidebar:      () => set(s => ({ sidebarOpen:      !s.sidebarOpen })),
-  togglePropsPanel:   () => set(s => ({ propsPanelOpen:   !s.propsPanelOpen })),
-  toggleResultsPanel: () => set(s => ({ resultsPanelOpen: !s.resultsPanelOpen })),
-  toggleFocusMode:    () => set(s => ({ focusMode:        !s.focusMode })),
+  toggleSidebar:       () => set(s => ({ sidebarOpen:      !s.sidebarOpen })),
+  togglePropsPanel:    () => set(s => ({ propsPanelOpen:   !s.propsPanelOpen })),
+  toggleResultsPanel:  () => set(s => ({ resultsPanelOpen: !s.resultsPanelOpen })),
+  toggleFocusMode:     () => set(s => ({ focusMode:        !s.focusMode })),
 
   // ─── Canvas ──────────────────────────────────────────────────────
   zoom: 1.0,
   pan:  { x: 0, y: 0 },
 
-  setZoom: (z) => set({ zoom: Math.min(Math.max(z, 0.2), 4.0) }),
+  setZoom: (z) => set({ zoom: Math.min(Math.max(z, 0.15), 5.0) }),
   setPan:  (p) => set({ pan: p }),
 
-  // ─── Paramètres simulation ───────────────────────────────────────
-  fidelity:      'standard',   // fast | standard | precise | max
-  activePlugins: [],
+  // ─── Sélection ───────────────────────────────────────────────────
+  selectedId: null,
+  setSelected: (id) => set({ selectedId: id }),
 
-  setFidelity:      (f)    => set({ fidelity: f }),
-  setActivePlugins: (list) => set({ activePlugins: list }),
+  // ─── Simulation ──────────────────────────────────────────────────
+  fidelity: 'standard',
+  setFidelity: (f) => set({ fidelity: f }),
 
-  // ─── Sélection composant ─────────────────────────────────────────
-  selectedComponentId: null,
-  setSelectedComponent: (id) => set({ selectedComponentId: id }),
-
-  // ─── Collaboration ───────────────────────────────────────────────
+  // ─── Collab ──────────────────────────────────────────────────────
   collabOpen: false,
   toggleCollab: () => set(s => ({ collabOpen: !s.collabOpen })),
 }))

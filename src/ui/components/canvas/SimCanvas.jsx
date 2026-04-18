@@ -1,260 +1,311 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
-import { useSimStore } from '../../../store/useSimStore'
-import { useAppStore } from '../../../store/useAppStore'
-import { traceRays, wavelengthToHex } from '../../../core/physics/geometric/raytracer'
+import { useSimStore }  from '../../../store/useSimStore'
+import { useAppStore }  from '../../../store/useAppStore'
+import { registry }     from '../../../core/plugin-api'
+import { bridge }       from '../../../core/SimulationBridge'
 
 const MODULE_COLORS = {
-  geo:'#f59e0b', wave:'#06b6d4', quant:'#7c3aed',
-  nuc:'#ef4444', spec:'#10b981', em:'#f97316',
-}
-
-const ICONS = {
-  source:'✦', lens:'◎', mirror:'⌒', prism:'▽', screen:'▪', blocker:'▬',
-  slit2:'⫿', grating:'|||', polarizer:'↕', halfwave:'◫', beamsplit:'⊡',
-  photon1:'ψ', entangle:'⊗', gamma:'γ', alpha:'α', dosimeter:'▣', shield:'⬛', fiber:'〜',
-}
-
-function getDefaultParams(type) {
-  const d = {
-    source:    { wavelength:550, intensity:1.0, polarization:'none', coherence:'high' },
-    lens:      { focalLength:50, diameter:40, material:'BK7', refractiveIndex:1.52 },
-    mirror:    { radius:100, angle:0 },
-    prism:     { apexAngle:60, refractiveIndex:1.52 },
-    screen:    { width:30, height:80, sensitivity:1.0 },
-    polarizer: { angle:0, transmittance:1.0 },
-    slit2:     { separation:0.5, width:0.1 },
-    grating:   { spacing:600, order:1 },
-    gamma:     { energy:1.25, activity:1e6 },
-    dosimeter: { sensitivity:1.0 },
-    blocker:   { width:10, height:60 },
-    halfwave:  { angle:0 },
-    beamsplit:  { ratio:0.5 },
-  }
-  return d[type] || {}
+  '@luxlab/geo-optics':   'var(--lb-geo)',
+  '@luxlab/wave-optics':  'var(--lb-wave)',
+  '@luxlab/quantum':      'var(--lb-quant)',
+  '@luxlab/nuclear':      'var(--lb-nuc)',
+  '@luxlab/spectroscopy': 'var(--lb-spec)',
+  '@luxlab/em':           'var(--lb-em)',
 }
 
 export default function SimCanvas() {
-  const canvasRef   = useRef(null)
+  const canvasRef    = useRef(null)
   const containerRef = useRef(null)
-  const { components, addComponent, updateComponent, isRunning, setResults } = useSimStore()
-  const { selectedComponentId, setSelectedComponent, zoom, setZoom } = useAppStore()
-  const [dragging, setDragging] = useState(null)
-  const [offset,   setOffset]   = useState({ x:0, y:0 })
-  const [canvasSize, setCanvasSize] = useState({ w:1200, h:800 })
+  const [size, setSize] = useState({ w:1200, h:800 })
 
-  // Resize observer
+  const {
+    components, addComponent, updateComponent,
+    isRunning, results, setResults,
+  } = useSimStore()
+
+  const {
+    zoom, setZoom, pan, setPan,
+    selectedId, setSelected,
+    fidelity,
+  } = useAppStore()
+
+  const dragging = useRef(null)
+  const dragOffset = useRef({ x:0, y:0 })
+  const isPanning  = useRef(false)
+  const panStart   = useRef({ mx:0, my:0, px:0, py:0 })
+
+  // ─── Resize observer ─────────────────────────────────────────────
   useEffect(() => {
-    const obs = new ResizeObserver(entries => {
-      const { width, height } = entries[0].contentRect
-      setCanvasSize({ w: Math.round(width), h: Math.round(height) })
+    const obs = new ResizeObserver(([e]) => {
+      const { width, height } = e.contentRect
+      setSize({ w: Math.round(width), h: Math.round(height) })
     })
     if (containerRef.current) obs.observe(containerRef.current)
     return () => obs.disconnect()
   }, [])
 
-  // Dessin
+  // ─── Rendu WASM → Canvas2D ───────────────────────────────────────
   useEffect(() => {
     const cvs = canvasRef.current
     if (!cvs) return
-    cvs.width  = canvasSize.w
-    cvs.height = canvasSize.h
+    cvs.width  = size.w
+    cvs.height = size.h
     const ctx  = cvs.getContext('2d')
     ctx.clearRect(0, 0, cvs.width, cvs.height)
+    if (!isRunning || !results?.rays) return
+
+    ctx.save()
+    ctx.translate(pan.x, pan.y)
+    ctx.scale(zoom, zoom)
+
+    const engine = registry.getEngineFor(components)
+    if (engine?.renderResult) engine.renderResult(ctx, results)
+
+    ctx.restore()
+  }, [results, isRunning, size, zoom, pan, components])
+
+  // ─── Lancer la simulation automatiquement ────────────────────────
+  useEffect(() => {
     if (!isRunning) return
+    const opts = buildOptions(fidelity)
 
+    bridge.runSimulation(components, opts)
+      .then(result => setResults(result))
+      .catch(err => {
+        if (err.message !== 'cancelled')
+          console.warn('[Canvas] Simulation:', err.message)
+      })
+  }, [components, isRunning, fidelity])
 
-    const res = traceRays(components)
-    setResults(res)
-
-    // Rayons
-    for (const ray of res.rays) {
-      const color = wavelengthToHex(ray.wl)
-      ctx.strokeStyle = color
-      ctx.lineWidth   = 1.3
-      ctx.globalAlpha = 0.8
-      ctx.shadowColor = color
-      ctx.shadowBlur  = 5
-      ctx.beginPath()
-      ray.segments.forEach((pt, i) =>
-        i === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y)
-      )
-      ctx.stroke()
-    }
-
-    // Points d'intersection
-    ctx.shadowBlur  = 0
-    ctx.globalAlpha = 1
-    for (const pt of res.intersections) {
-      const colors = { refraction:'#06b6d4', reflection:'#f59e0b', dispersion:'#7c3aed', detection:'#10b981' }
-      ctx.beginPath()
-      ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2)
-      ctx.fillStyle = colors[pt.type] || '#fff'
-      ctx.fill()
-    }
-
-    // Images conjuguées
-    for (const img of res.images) {
-      ctx.beginPath()
-      ctx.arc(img.x, img.y, 5, 0, Math.PI * 2)
-      ctx.strokeStyle = img.real ? '#10b981' : '#f59e0b'
-      ctx.lineWidth   = 1.5
-      ctx.setLineDash(img.real ? [] : [3, 3])
-      ctx.stroke()
-      ctx.setLineDash([])
-      ctx.fillStyle   = 'var(--lb-text)'
-      ctx.font        = '9px monospace'
-      ctx.fillText(
-        `${img.real ? 'Image réelle' : 'Image virtuelle'} | m=${img.magnification.toFixed(2)}`,
-        img.x + 8, img.y - 5
-      )
-    }
-
-    if (typeof setResults === 'function') setResults(res)
-  }, [components, isRunning, canvasSize])
-
+  // ─── Drop depuis sidebar ─────────────────────────────────────────
   const handleDrop = useCallback((e) => {
     e.preventDefault()
     const raw = e.dataTransfer.getData('application/luxlab')
     if (!raw) return
-    const comp = JSON.parse(raw)
+    const def  = JSON.parse(raw)
     const rect = containerRef.current.getBoundingClientRect()
-    addComponent({
-      ...comp,
-      x: Math.round((e.clientX - rect.left) / zoom),
-      y: Math.round((e.clientY - rect.top)  / zoom),
-      params: getDefaultParams(comp.type),
-    })
-  }, [zoom, addComponent])
+    const x    = (e.clientX - rect.left - pan.x) / zoom
+    const y    = (e.clientY - rect.top  - pan.y) / zoom
+    addComponent(def, x, y)
+  }, [zoom, pan, addComponent])
 
-  const handleMouseDown = useCallback((e, id) => {
+  // ─── Drag composant ──────────────────────────────────────────────
+  const startDrag = useCallback((e, id) => {
     e.stopPropagation()
-    setSelectedComponent(id)
-    const comp = components.find(c => c.id === id)
-    setDragging(id)
-    setOffset({ x: e.clientX - comp.x * zoom, y: e.clientY - comp.y * zoom })
-  }, [components, zoom, setSelectedComponent])
+    setSelected(id)
+    const comp = useSimStore.getState().components.find(c => c.id === id)
+    dragging.current  = id
+    dragOffset.current = {
+      x: e.clientX - comp.x * zoom - pan.x,
+      y: e.clientY - comp.y * zoom - pan.y,
+    }
+  }, [zoom, pan, setSelected])
 
   const handleMouseMove = useCallback((e) => {
-    if (!dragging) return
-    updateComponent(dragging, {
-      x: Math.round((e.clientX - offset.x) / zoom),
-      y: Math.round((e.clientY - offset.y) / zoom),
-    })
-  }, [dragging, offset, zoom, updateComponent])
+    if (dragging.current) {
+      updateComponent(dragging.current, {
+        x: Math.round((e.clientX - dragOffset.current.x - pan.x) / zoom),
+        y: Math.round((e.clientY - dragOffset.current.y - pan.y) / zoom),
+      })
+      return
+    }
+    if (isPanning.current) {
+      setPan({
+        x: panStart.current.px + (e.clientX - panStart.current.mx),
+        y: panStart.current.py + (e.clientY - panStart.current.my),
+      })
+    }
+  }, [zoom, pan, updateComponent, setPan])
+
+  const handleMouseDown = useCallback((e) => {
+    if (e.button === 1 || (e.button === 0 && e.altKey)) {
+      isPanning.current = true
+      panStart.current  = { mx:e.clientX, my:e.clientY, px:pan.x, py:pan.y }
+    }
+  }, [pan])
+
+  const handleMouseUp = useCallback(() => {
+    dragging.current  = null
+    isPanning.current = false
+  }, [])
+
+  const handleWheel = useCallback((e) => {
+    e.preventDefault()
+    const delta  = e.deltaY > 0 ? -0.08 : 0.08
+    setZoom(zoom + delta)
+  }, [zoom, setZoom])
+
+  const handleKeyDown = useCallback((e) => {
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
+      useSimStore.getState().removeComponent(selectedId)
+      setSelected(null)
+    }
+  }, [selectedId, setSelected])
 
   return (
     <div
       ref={containerRef}
-      style={{ flex:1, position:'relative', overflow:'hidden', background:'var(--lb-bg)' }}
+      tabIndex={0}
       onDrop={handleDrop}
       onDragOver={e => e.preventDefault()}
       onMouseMove={handleMouseMove}
-      onMouseUp={() => setDragging(null)}
-      onWheel={e => { e.preventDefault(); setZoom(zoom + (e.deltaY > 0 ? -0.08 : 0.08)) }}
-      onClick={() => setSelectedComponent(null)}
+      onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUp}
+      onWheel={handleWheel}
+      onKeyDown={handleKeyDown}
+      onClick={() => setSelected(null)}
+      style={{
+        flex:       1,
+        position:   'relative',
+        overflow:   'hidden',
+        background: 'var(--lb-bg)',
+        outline:    'none',
+        cursor:     isPanning.current ? 'grabbing' : 'default',
+      }}
     >
       {/* Grille */}
-      <div style={{
-        position:'absolute', inset:0, pointerEvents:'none',
-        backgroundImage:`linear-gradient(var(--lb-border) 1px,transparent 1px),
-          linear-gradient(90deg,var(--lb-border) 1px,transparent 1px)`,
-        backgroundSize:`${40*zoom}px ${40*zoom}px`,
-        opacity:0.25,
-      }}/>
+      <Grid zoom={zoom} pan={pan}/>
 
-      {/* Canvas 2D rayons */}
+      {/* Canvas rayons */}
       <canvas ref={canvasRef} style={{
-        position:'absolute', inset:0, pointerEvents:'none',
-        width:'100%', height:'100%',
+        position:      'absolute',
+        inset:         0,
+        pointerEvents: 'none',
+        width:         '100%',
+        height:        '100%',
       }}/>
 
       {/* Composants SVG */}
       <svg style={{
-        position:'absolute', inset:0,
-        width:'100%', height:'100%', overflow:'visible',
+        position: 'absolute',
+        inset:    0,
+        width:    '100%',
+        height:   '100%',
+        overflow: 'visible',
       }}>
-        {components.map(comp => (
-          <ComponentSVG
-            key={comp.id}
-            comp={comp}
-            zoom={zoom}
-            selected={selectedComponentId === comp.id}
-            onMouseDown={e => handleMouseDown(e, comp.id)}
-          />
-        ))}
+        <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
+          {components.map(comp => {
+            const def = registry.getComponentDef(comp.type)
+            if (!def) return null
+            return (
+              <CompNode
+                key={comp.id}
+                comp={comp}
+                def={def}
+                selected={selectedId === comp.id}
+                onMouseDown={e => startDrag(e, comp.id)}
+              />
+            )
+          })}
+        </g>
       </svg>
 
       {/* Toolbar flottante */}
-      <CanvasToolbar zoom={zoom} setZoom={setZoom} />
+      <CanvasToolbar zoom={zoom} setZoom={setZoom}/>
 
-      {/* Hint vide */}
-      {components.length === 0 && (
-        <div style={{
-          position:'absolute', top:'50%', left:'50%',
-          transform:'translate(-50%,-50%)',
-          textAlign:'center', color:'var(--lb-muted)',
-          fontSize:12, pointerEvents:'none',
-        }}>
-          <div style={{ fontSize:36, marginBottom:12, opacity:.2 }}>✦</div>
-          Glisse un composant depuis la sidebar
-        </div>
-      )}
+      {/* Hint canvas vide */}
+      {components.length === 0 && <EmptyHint/>}
 
       {/* Overlay info */}
-      {components.length > 0 && (
-        <InfoOverlay components={components} isRunning={isRunning} />
-      )}
+      <StatusOverlay components={components} isRunning={isRunning} results={results}/>
     </div>
   )
 }
 
-function ComponentSVG({ comp, zoom, selected, onMouseDown }) {
-  const color = MODULE_COLORS[comp.module] || '#64748b'
-  const icon  = ICONS[comp.type] || '?'
-  const cx    = comp.x * zoom
-  const cy    = comp.y * zoom
+// ─── Composant SVG ────────────────────────────────────────────────
 
-  const isLens   = comp.type === 'lens'
-  const isScreen = ['screen','dosimeter'].includes(comp.type)
+function CompNode({ comp, def, selected, onMouseDown }) {
+  const render = def.render?.() || {}
+  const color  = MODULE_COLORS[comp.moduleId] || '#7f8c8d'
+  const isLens   = render.shape === 'lens'
+  const isScreen = render.shape === 'screen'
+  const isMirror = render.shape === 'mirror'
 
   return (
     <g
-      transform={`translate(${cx},${cy})`}
+      transform={`translate(${comp.x},${comp.y})`}
       style={{ cursor:'grab', userSelect:'none' }}
       onMouseDown={onMouseDown}
+      onClick={e => e.stopPropagation()}
     >
+      {/* Halo de sélection */}
+      {selected && (
+        <rect
+          x={-28} y={-28} width={56} height={56}
+          rx={10}
+          fill="none"
+          stroke={color}
+          strokeWidth={1}
+          strokeDasharray="4 3"
+          opacity={0.5}
+        />
+      )}
+
       {isLens ? (
-        <>
-          <ellipse rx={10} ry={35} fill={`${color}22`} stroke={selected?'var(--lb-accent)':color} strokeWidth={1.5}/>
-          <ellipse rx={10} ry={35} fill="none" stroke={color} strokeWidth={.5} strokeDasharray="2,2"/>
-        </>
+        <ellipse
+          rx={10} ry={36}
+          fill={`${color}18`}
+          stroke={selected ? color : `${color}99`}
+          strokeWidth={selected ? 2 : 1.5}
+        />
       ) : isScreen ? (
-        <rect x={-5} y={-45} width={10} height={90}
-          fill={`${color}33`} stroke={selected?'var(--lb-accent)':color} strokeWidth={1.5}
-          rx={2}
+        <rect
+          x={-5} y={-45} width={10} height={90} rx={2}
+          fill={`${color}22`}
+          stroke={selected ? color : `${color}99`}
+          strokeWidth={selected ? 2 : 1.5}
+        />
+      ) : isMirror ? (
+        <line
+          x1={-30} y1={0} x2={30} y2={0}
+          stroke={color}
+          strokeWidth={selected ? 3 : 2}
+          strokeLinecap="round"
+          transform={`rotate(${-(comp.params?.angle || 45)})`}
         />
       ) : (
-        <>
-          <rect x={-20} y={-20} width={40} height={40} rx={6}
-            fill={`${color}22`}
-            stroke={selected?'var(--lb-accent)':color}
-            strokeWidth={selected?2:1.5}
-          />
-          {selected && (
-            <rect x={-23} y={-23} width={46} height={46} rx={8}
-              fill="none" stroke="var(--lb-accent)" strokeWidth={1} opacity={.4}
-            />
-          )}
-          <text x={0} y={6} textAnchor="middle" fontSize={16} fill={color}>{icon}</text>
-        </>
+        <rect
+          x={-20} y={-20} width={40} height={40} rx={6}
+          fill={`${color}15`}
+          stroke={selected ? color : `${color}88`}
+          strokeWidth={selected ? 2 : 1.5}
+        />
       )}
-      <text x={0} y={isLens||isScreen?55:32} textAnchor="middle"
-        fontSize={9} fill="var(--lb-muted)" fontFamily="monospace">
+
+      {/* Icône */}
+      {!isLens && !isScreen && !isMirror && (
+        <text
+          x={0} y={6}
+          textAnchor="middle"
+          fontSize={16}
+          fill={color}
+          style={{ pointerEvents:'none' }}
+        >
+          {def.icon}
+        </text>
+      )}
+
+      {/* Label */}
+      <text
+        x={0}
+        y={isLens || isScreen ? 56 : 34}
+        textAnchor="middle"
+        fontSize={9}
+        fill="var(--lb-muted)"
+        style={{ pointerEvents:'none', fontFamily:'var(--font-mono)' }}
+      >
         {comp.label}
       </text>
-      {comp.params?.wavelength && (
-        <text x={0} y={isLens||isScreen?65:42} textAnchor="middle"
-          fontSize={8} fill={wavelengthToHex(comp.params.wavelength)} fontFamily="monospace">
+
+      {/* λ pour la source */}
+      {comp.type === 'source' && comp.params?.wavelength && (
+        <text
+          x={0} y={isLens || isScreen ? 66 : 44}
+          textAnchor="middle"
+          fontSize={8}
+          fill={wlToCSS(comp.params.wavelength)}
+          style={{ pointerEvents:'none', fontFamily:'var(--font-mono)' }}
+        >
           λ={comp.params.wavelength}nm
         </text>
       )}
@@ -262,73 +313,171 @@ function ComponentSVG({ comp, zoom, selected, onMouseDown }) {
   )
 }
 
-function wavelengthToHex(wl) {
-  if (wl < 440) return '#8b5cf6'
-  if (wl < 490) return '#3b82f6'
-  if (wl < 510) return '#06b6d4'
-  if (wl < 580) return '#22c55e'
-  if (wl < 645) return '#f59e0b'
-  return '#ef4444'
-}
+// ─── Grille ───────────────────────────────────────────────────────
 
-function CanvasToolbar({ zoom, setZoom }) {
+function Grid({ zoom, pan }) {
+  const size = 40 * zoom
   return (
     <div style={{
-      position:'absolute', top:12, left:'50%', transform:'translateX(-50%)',
-      display:'flex', alignItems:'center', gap:3,
-      background:'var(--lb-panel)', border:'1px solid var(--lb-border)',
-      borderRadius:8, padding:'4px 8px', zIndex:10,
+      position:        'absolute',
+      inset:           0,
+      backgroundImage: `
+        linear-gradient(to right, var(--lb-border) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--lb-border) 1px, transparent 1px)
+      `,
+      backgroundSize:     `${size}px ${size}px`,
+      backgroundPosition: `${pan.x % size}px ${pan.y % size}px`,
+      opacity:            0.7,
+      pointerEvents:      'none',
+    }}/>
+  )
+}
+
+// ─── Toolbar flottante ────────────────────────────────────────────
+
+function CanvasToolbar({ zoom, setZoom }) {
+  const tools = [
+    { label:'+', title:'Zoom avant',   action: () => setZoom(zoom + 0.1) },
+    { label:'−', title:'Zoom arrière', action: () => setZoom(zoom - 0.1) },
+    { label:'⌂', title:'Réinitialiser', action: () => setZoom(1.0) },
+  ]
+  return (
+    <div style={{
+      position:     'absolute',
+      bottom:       16,
+      right:        16,
+      display:      'flex',
+      flexDirection:'column',
+      gap:          4,
+      background:   'var(--lb-surface)',
+      border:       '1px solid var(--lb-border)',
+      borderRadius: 8,
+      padding:      6,
+      boxShadow:    '0 2px 8px rgba(0,0,0,.08)',
     }}>
-      {[['▲','Sélectionner'],['✥','Déplacer'],null,['+','Zoom +'],['−','Zoom −'],null,['⊞','Grille'],null,['↩','Annuler'],['↪','Rétablir']].map((item,i) =>
-        item === null
-          ? <div key={i} style={{ width:1, height:18, background:'var(--lb-border)', margin:'0 2px' }}/>
-          : <button key={i} title={item[1]} onClick={() => {
-              if (item[0]==='+') setZoom(zoom+0.1)
-              if (item[0]==='−') setZoom(zoom-0.1)
-            }} style={{
-              width:26, height:26, borderRadius:4,
-              border:'1px solid transparent', background:'transparent',
-              color:'var(--lb-muted)', cursor:'pointer', fontSize:12,
-              display:'flex', alignItems:'center', justifyContent:'center',
-              fontFamily:'inherit',
-            }}
-            onMouseEnter={e=>{ e.currentTarget.style.background='#1e2d45'; e.currentTarget.style.color='var(--lb-text)' }}
-            onMouseLeave={e=>{ e.currentTarget.style.background='transparent'; e.currentTarget.style.color='var(--lb-muted)' }}
-          >{item[0]}</button>
-      )}
-      <div style={{ width:1, height:18, background:'var(--lb-border)', margin:'0 2px' }}/>
-      <span style={{ fontSize:10, color:'var(--lb-muted)', padding:'0 4px' }}>
-        {Math.round(zoom*100)}%
-      </span>
+      {tools.map(t => (
+        <button key={t.label} onClick={t.action} title={t.title} style={{
+          width:        28,
+          height:       28,
+          borderRadius: 4,
+          border:       '1px solid var(--lb-border)',
+          background:   'transparent',
+          color:        'var(--lb-muted)',
+          cursor:       'pointer',
+          fontSize:     14,
+          display:      'flex',
+          alignItems:   'center',
+          justifyContent:'center',
+          fontFamily:   'var(--font-mono)',
+        }}>
+          {t.label}
+        </button>
+      ))}
+      <div style={{
+        textAlign:  'center',
+        fontSize:   9,
+        color:      'var(--lb-hint)',
+        fontFamily: 'var(--font-mono)',
+        marginTop:  2,
+      }}>
+        {Math.round(zoom * 100)}%
+      </div>
     </div>
   )
 }
 
-function InfoOverlay({ components, isRunning }) {
+// ─── Hint vide ────────────────────────────────────────────────────
+
+function EmptyHint() {
+  return (
+    <div style={{
+      position:       'absolute',
+      top:            '50%',
+      left:           '50%',
+      transform:      'translate(-50%,-50%)',
+      textAlign:      'center',
+      color:          'var(--lb-hint)',
+      pointerEvents:  'none',
+    }}>
+      <LogoMarkHint/>
+      <div style={{ fontSize:13, marginTop:12, color:'var(--lb-muted)' }}>
+        Glisse un composant depuis la sidebar
+      </div>
+      <div style={{ fontSize:10, marginTop:6, fontFamily:'var(--font-mono)' }}>
+        Alt+clic pour déplacer la vue · Molette pour zoomer
+      </div>
+    </div>
+  )
+}
+
+function LogoMarkHint() {
+  return (
+    <svg width={48} height={48} viewBox="0 0 100 100" style={{ opacity:.15 }}>
+      <rect x="10" y="10" width="25" height="25" fill="var(--lb-text)"/>
+      <path d="M 35 22.5 L 77.5 22.5 L 77.5 65"
+        fill="none" stroke="var(--lb-text)" strokeWidth="4" strokeLinecap="square"/>
+      <path d="M 65 77.5 L 22.5 77.5 L 22.5 35"
+        fill="none" stroke="var(--lb-text)" strokeWidth="4" strokeLinecap="square"/>
+      <rect x="65" y="65" width="25" height="25" fill="var(--lb-text)"/>
+    </svg>
+  )
+}
+
+// ─── Overlay statut ───────────────────────────────────────────────
+
+function StatusOverlay({ components, isRunning, results }) {
   const src = components.find(c => c.type === 'source')
   return (
     <div style={{
-      position:'absolute', bottom:16, left:16,
-      background:'var(--lb-panel)', border:'1px solid var(--lb-border)',
-      borderRadius:8, padding:'8px 14px', fontSize:10, color:'var(--lb-muted)',
+      position:     'absolute',
+      bottom:       16,
+      left:         16,
+      background:   'var(--lb-surface)',
+      border:       '1px solid var(--lb-border)',
+      borderRadius: 8,
+      padding:      '8px 12px',
+      fontSize:     10,
+      fontFamily:   'var(--font-mono)',
+      boxShadow:    '0 2px 8px rgba(0,0,0,.08)',
     }}>
       <div style={{
-        color: isRunning ? 'var(--lb-success)' : 'var(--lb-muted)',
-        fontWeight:600, marginBottom:4,
+        color:        isRunning ? 'var(--lb-success)' : 'var(--lb-muted)',
+        fontWeight:   600,
+        marginBottom: 4,
       }}>
-        {isRunning ? '● Simulation active' : '○ En pause — cliquer ▶ Simuler'}
+        {isRunning ? '● Simulation active' : '○ En pause'}
       </div>
-      {src && <>
-        <div>λ = {src.params?.wavelength || 550} nm</div>
-        <div style={{ marginTop:2, display:'flex', alignItems:'center', gap:5 }}>
-          <div style={{
-            width:40, height:6, borderRadius:3,
-            background:`linear-gradient(to right,
-              #8b5cf6,#3b82f6,#06b6d4,#22c55e,#f59e0b,#ef4444)`,
-          }}/>
-          <span>spectre visible</span>
+      {src && (
+        <div style={{ color:'var(--lb-muted)' }}>
+          λ = {src.params?.wavelength || 550} nm
         </div>
-      </>}
+      )}
+      {results?.durationMs && (
+        <div style={{ color:'var(--lb-hint)', marginTop:2 }}>
+          {results.durationMs.toFixed(1)} ms
+        </div>
+      )}
     </div>
   )
+}
+
+// ─── Utils ───────────────────────────────────────────────────────
+
+function buildOptions(fidelity) {
+  const p = {
+    fast:     { numRays:3,  rayLength:1200, aberrations:false },
+    standard: { numRays:7,  rayLength:1200, aberrations:false },
+    precise:  { numRays:15, rayLength:1200, aberrations:true  },
+    max:      { numRays:31, rayLength:1200, aberrations:true  },
+  }
+  return p[fidelity] || p.standard
+}
+
+function wlToCSS(wl) {
+  if (wl < 440) return '#8e44ad'
+  if (wl < 490) return '#2980b9'
+  if (wl < 510) return '#16a085'
+  if (wl < 580) return '#27ae60'
+  if (wl < 645) return '#f39c12'
+  return '#e74c3c'
 }

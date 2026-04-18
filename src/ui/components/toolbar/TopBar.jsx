@@ -1,140 +1,161 @@
-import { useAppStore } from '../../../store/useAppStore'
-import { useSimStore } from '../../../store/useSimStore'
-import { exportLux, importLux } from '../../../core/formats/lux'
+import { useAppStore }  from '../../../store/useAppStore'
+import { useSimStore }  from '../../../store/useSimStore'
 
-const MODES = [
-  { id: 'etudiant', label: 'Étudiant' },
-  { id: 'pro',      label: 'Professionnel' },
-  { id: 'recherche',label: 'Recherche' },
-  { id: 'tp',       label: 'Mode TP' },
+const FIDELITY_OPTIONS = [
+  { id: 'fast',     label: 'Rapide'   },
+  { id: 'standard', label: 'Standard' },
+  { id: 'precise',  label: 'Précis'   },
 ]
 
-const COLLABORATORS = [
-  { initials: 'KM', color: '#7c3aed', name: 'Kofi Mensah' },
-  { initials: 'DA', color: '#10b981', name: 'Dr. Adjovi' },
-]
-
-export default function TopBar() {
-  const { mode, setMode, toggleCollab } = useAppStore()
-  const { isRunning, toggleSim } = useSimStore()
-  const { components, addComponent } = useSimStore()
-
-const handleExport = () => exportLux(components, { title: 'Mon projet LuxLab' })
-
-const handleImport = () => {
-  const input = document.createElement('input')
-  input.type  = 'file'
-  input.accept = '.lux,.json'
-  input.onchange = async (e) => {
-    const file = e.target.files[0]
-    if (!file) return
-    const doc = await importLux(file)
-    doc.components.forEach(c => addComponent(c))
-  }
-  input.click()
-}
+export default function TopBar({ onOpenTemplates }) {
+  const { fidelity, setFidelity,
+          toggleSidebar, toggleFocusMode }  = useAppStore()
+  const { isRunning, toggleSim, components } = useSimStore()
 
   return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      height: 44,
-      background: 'var(--lb-panel)',
+    <header style={{
+      height:       44,
+      background:   'var(--lb-surface)',
       borderBottom: '1px solid var(--lb-border)',
-      flexShrink: 0,
+      display:      'flex',
+      alignItems:   'center',
+      flexShrink:   0,
+      userSelect:   'none',
     }}>
+
       {/* Logo */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '0 16px', borderRight: '1px solid var(--lb-border)',
-        height: '100%', minWidth: 160,
+        display:     'flex',
+        alignItems:  'center',
+        gap:         10,
+        padding:     '0 16px',
+        borderRight: '1px solid var(--lb-border)',
+        height:      '100%',
+        minWidth:    150,
       }}>
-        <LuxIcon />
-        <span style={{ fontSize: 15, fontWeight: 700, color: '#fff', letterSpacing: .5 }}>
-          Lux<span style={{ color: 'var(--lb-accent)' }}>Lab</span>
+        <LogoMark size={22}/>
+        <span style={{
+          fontSize:      14,
+          fontWeight:    700,
+          color:         'var(--lb-text)',
+          letterSpacing: 1,
+          fontFamily:    'var(--font-ui)',
+        }}>
+          LuxLab
         </span>
       </div>
 
-      {/* Modes */}
-      <div style={{ display: 'flex', gap: 2, padding: '0 12px', flex: 1 }}>
-        {MODES.map(m => (
-          <button key={m.id} onClick={() => setMode(m.id)} style={{
-            padding: '4px 12px', borderRadius: 4, border: '1px solid',
-            borderColor: mode === m.id ? 'var(--lb-border)' : 'transparent',
-            background: mode === m.id ? '#1e2d45' : 'transparent',
-            color: mode === m.id ? 'var(--lb-accent)' : 'var(--lb-muted)',
-            cursor: 'pointer', fontSize: 11, fontFamily: 'inherit',
-            transition: 'all .15s',
+      {/* Actions gauche */}
+      <div style={{ display:'flex', alignItems:'center', gap:2, padding:'0 8px' }}>
+        <TbBtn onClick={toggleSidebar} title="Sidebar">⊞</TbBtn>
+        <TbBtn onClick={onOpenTemplates} title="Templates & Expériences">
+          Templates
+        </TbBtn>
+        <TbBtn title="Plugins">Plugins</TbBtn>
+      </div>
+
+      {/* Centre — fidélité */}
+      <div style={{
+        flex:        1,
+        display:     'flex',
+        alignItems:  'center',
+        justifyContent: 'center',
+        gap:         2,
+      }}>
+        {FIDELITY_OPTIONS.map(f => (
+          <button key={f.id} onClick={() => setFidelity(f.id)} style={{
+            padding:     '3px 10px',
+            borderRadius: 4,
+            border:       '1px solid',
+            borderColor:  fidelity === f.id ? 'var(--lb-border-md)' : 'transparent',
+            background:   fidelity === f.id ? 'var(--lb-bg)' : 'transparent',
+            color:        fidelity === f.id ? 'var(--lb-text)' : 'var(--lb-muted)',
+            fontSize:     11,
+            cursor:       'pointer',
+            fontFamily:   'var(--font-ui)',
           }}>
-            {m.label}
+            {f.label}
           </button>
         ))}
       </div>
 
       {/* Droite */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '0 12px', borderLeft: '1px solid var(--lb-border)',
+        display:    'flex',
+        alignItems: 'center',
+        gap:        6,
+        padding:    '0 12px',
+        borderLeft: '1px solid var(--lb-border)',
       }}>
-        {/* Collaborateurs */}
-        <div style={{ display: 'flex', gap: 4 }}>
-          {COLLABORATORS.map(c => (
-            <div key={c.initials} title={c.name} style={{
-              width: 24, height: 24, borderRadius: '50%',
-              background: c.color, display: 'flex', alignItems: 'center',
-              justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#fff',
-              cursor: 'pointer',
-            }}>
-              {c.initials}
-            </div>
-          ))}
-        </div>
+        <span style={{ fontSize:10, color:'var(--lb-muted)' }}>
+          {components.length} composant{components.length !== 1 ? 's' : ''}
+        </span>
 
-        <TbBtn onClick={toggleCollab}>⟳ Collab</TbBtn>
-        <TbBtn onClick={handleImport}>⬆ Import</TbBtn>
-        <TbBtn onClick={handleExport}>⬇ Export</TbBtn>
-        <TbBtn
-          onClick={toggleSim}
-          style={{
-            background: isRunning ? 'var(--lb-danger)' : 'var(--lb-accent)',
-            color: '#000',
-            borderColor: isRunning ? 'var(--lb-danger)' : 'var(--lb-accent)',
-            fontWeight: 700,
-          }}
-        >
+        <TbBtn onClick={toggleFocusMode} title="Mode Focus">Focus</TbBtn>
+
+        <button onClick={toggleSim} style={{
+          padding:      '5px 14px',
+          borderRadius: 4,
+          border:       'none',
+          background:   isRunning ? '#e74c3c' : 'var(--lb-text)',
+          color:        '#fff',
+          fontSize:     12,
+          fontWeight:   600,
+          cursor:       'pointer',
+          fontFamily:   'var(--font-ui)',
+          letterSpacing: 0.5,
+        }}>
           {isRunning ? '⏹ Stop' : '▶ Simuler'}
-        </TbBtn>
+        </button>
       </div>
-    </div>
+    </header>
   )
 }
 
-function TbBtn({ children, onClick, style = {} }) {
+function TbBtn({ children, onClick, title }) {
   return (
-    <button onClick={onClick} style={{
-      padding: '4px 10px', borderRadius: 4,
-      border: '1px solid var(--lb-border)',
-      background: 'transparent', color: 'var(--lb-text)',
-      cursor: 'pointer', fontSize: 10, fontFamily: 'inherit',
-      ...style,
-    }}>
+    <button onClick={onClick} title={title} style={{
+      padding:      '4px 10px',
+      borderRadius: 4,
+      border:       '1px solid transparent',
+      background:   'transparent',
+      color:        'var(--lb-muted)',
+      fontSize:     11,
+      cursor:       'pointer',
+      fontFamily:   'var(--font-ui)',
+      transition:   'all .12s',
+    }}
+      onMouseEnter={e => {
+        e.currentTarget.style.background   = 'var(--lb-bg)'
+        e.currentTarget.style.borderColor  = 'var(--lb-border)'
+        e.currentTarget.style.color        = 'var(--lb-text)'
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.background   = 'transparent'
+        e.currentTarget.style.borderColor  = 'transparent'
+        e.currentTarget.style.color        = 'var(--lb-muted)'
+      }}
+    >
       {children}
     </button>
   )
 }
 
-function LuxIcon() {
+// Logo SVG fidèle à l'original
+export function LogoMark({ size = 24 }) {
+  const s = size / 100
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="4" fill="#00c9ff"/>
-      <line x1="12" y1="2" x2="12" y2="6" stroke="#00c9ff" strokeWidth="1.5"/>
-      <line x1="12" y1="18" x2="12" y2="22" stroke="#00c9ff" strokeWidth="1.5"/>
-      <line x1="2" y1="12" x2="6" y2="12" stroke="#f59e0b" strokeWidth="1.5"/>
-      <line x1="18" y1="12" x2="22" y2="12" stroke="#f59e0b" strokeWidth="1.5"/>
-      <line x1="4.9" y1="4.9" x2="7.8" y2="7.8" stroke="#7c3aed" strokeWidth="1.5"/>
-      <line x1="16.2" y1="16.2" x2="19.1" y2="19.1" stroke="#7c3aed" strokeWidth="1.5"/>
-      <line x1="19.1" y1="4.9" x2="16.2" y2="7.8" stroke="#10b981" strokeWidth="1.5"/>
-      <line x1="7.8" y1="16.2" x2="4.9" y2="19.1" stroke="#10b981" strokeWidth="1.5"/>
+    <svg width={size} height={size} viewBox="0 0 100 100">
+      <rect x="10" y="10" width="25" height="25" fill="var(--lb-text)"/>
+      <path d="M 35 22.5 L 77.5 22.5 L 77.5 65"
+        fill="none" stroke="var(--lb-text)" strokeWidth={4*s*100/size}
+        strokeLinecap="square"
+      />
+      <path d="M 65 77.5 L 22.5 77.5 L 22.5 35"
+        fill="none" stroke="var(--lb-text)" strokeWidth={4*s*100/size}
+        strokeLinecap="square"
+      />
+      <rect x="65" y="65" width="25" height="25" fill="var(--lb-text)"/>
     </svg>
   )
 }

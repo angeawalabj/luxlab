@@ -1,145 +1,208 @@
-import { useState } from 'react'
-import { useAppStore } from '../../../store/useAppStore'
-import { useSimStore } from '../../../store/useSimStore'
+import { useState, useEffect } from 'react'
+import { registry }            from '../../../core/plugin-api'
 
-const MODULES = [
-  {
-    id: 'geo', label: 'Géométrique', color: '#f59e0b',
-    components: [
-      { type: 'source',    icon: '✦', label: 'Source lumineuse' },
-      { type: 'lens',      icon: '◎', label: 'Lentille mince' },
-      { type: 'mirror',    icon: '⌒', label: 'Miroir courbe' },
-      { type: 'prism',     icon: '▽', label: 'Prisme' },
-      { type: 'screen',    icon: '▪', label: 'Détecteur' },
-      { type: 'blocker',   icon: '▬', label: 'Obstacle' },
-    ]
-  },
-  {
-    id: 'wave', label: 'Ondulatoire', color: '#06b6d4',
-    components: [
-      { type: 'slit2',     icon: '⫿', label: 'Fentes de Young' },
-      { type: 'grating',   icon: '|||', label: 'Réseau diffraction' },
-      { type: 'polarizer', icon: '↕', label: 'Polariseur' },
-      { type: 'halfwave',  icon: '◫', label: 'Lame demi-onde' },
-      { type: 'beamsplit', icon: '⊡', label: 'Séparateur' },
-    ]
-  },
-  {
-    id: 'quant', label: 'Quantique', color: '#7c3aed',
-    components: [
-      { type: 'photon1',   icon: 'ψ', label: 'Photon unique' },
-      { type: 'entangle',  icon: '⊗', label: 'Source intriquée' },
-      { type: 'qdetector', icon: '⬡', label: 'Détecteur quantique' },
-    ]
-  },
-  {
-    id: 'nuc', label: 'Nucléaire', color: '#ef4444',
-    components: [
-      { type: 'gamma',     icon: 'γ', label: 'Source gamma' },
-      { type: 'alpha',     icon: 'α', label: 'Source alpha' },
-      { type: 'dosimeter', icon: '▣', label: 'Dosimètre' },
-      { type: 'shield',    icon: '⬛', label: 'Blindage' },
-    ]
-  },
-  {
-    id: 'spec', label: 'Spectroscopie', color: '#10b981',
-    components: [
-      { type: 'spectrometer', icon: '≋', label: 'Spectromètre' },
-      { type: 'filter',       icon: '⬜', label: 'Filtre spectral' },
-    ]
-  },
-  {
-    id: 'em', label: 'Électromagn.', color: '#f97316',
-    components: [
-      { type: 'waveguide', icon: '⇒', label: 'Guide d\'onde' },
-      { type: 'fiber',     icon: '〜', label: 'Fibre optique' },
-    ]
-  },
-]
+const MODULE_COLORS = {
+  '@luxlab/geo-optics':   'var(--lb-geo)',
+  '@luxlab/wave-optics':  'var(--lb-wave)',
+  '@luxlab/quantum':      'var(--lb-quant)',
+  '@luxlab/nuclear':      'var(--lb-nuc)',
+  '@luxlab/spectroscopy': 'var(--lb-spec)',
+  '@luxlab/em':           'var(--lb-em)',
+}
+
+function getColor(moduleId) {
+  return MODULE_COLORS[moduleId] || 'var(--lb-muted)'
+}
 
 export default function Sidebar() {
-  const { activeModules, toggleModule } = useAppStore()
-  const { addComponent } = useSimStore()
-  const [open, setOpen] = useState(['geo', 'wave'])
+  const [allComps, setAllComps] = useState(registry.getAllComponents())
+  const [open, setOpen]         = useState({})
 
-  const toggle = (id) => setOpen(o => o.includes(id) ? o.filter(x => x !== id) : [...o, id])
+  // Se reconstruit quand un plugin est chargé/déchargé
+  useEffect(() => {
+    const unsub = registry.onChange(() => {
+      setAllComps(registry.getAllComponents())
+    })
+    return unsub
+  }, [])
 
-  const handleDragStart = (e, comp, moduleId) => {
-    e.dataTransfer.setData('application/luxlab', JSON.stringify({ ...comp, module: moduleId }))
+  // Grouper par moduleId → puis par category
+  const byModule = allComps.reduce((acc, comp) => {
+    const mod = comp.moduleId
+    if (!acc[mod]) acc[mod] = {}
+    const cat = comp.category || 'Général'
+    if (!acc[mod][cat]) acc[mod][cat] = []
+    acc[mod][cat].push(comp)
+    return acc
+  }, {})
+
+  const toggleModule = (mod) =>
+    setOpen(o => ({ ...o, [mod]: !(o[mod] ?? true) }))
+
+  const handleDragStart = (e, comp) => {
+    e.dataTransfer.setData(
+      'application/luxlab',
+      JSON.stringify({ type: comp.type, pluginId: comp.pluginId })
+    )
+    e.dataTransfer.effectAllowed = 'copy'
+  }
+
+  const getPluginName = (moduleId) => {
+    const p = registry.get(moduleId)
+    return p?.name || moduleId.split('/').pop()
+  }
+
+  if (Object.keys(byModule).length === 0) {
+    return (
+      <aside style={sidebarStyle}>
+        <div style={{ padding:20, color:'var(--lb-hint)', fontSize:11, textAlign:'center' }}>
+          Aucun plugin chargé
+        </div>
+      </aside>
+    )
   }
 
   return (
-    <div style={{
-      width: 200, background: 'var(--lb-panel)',
-      borderRight: '1px solid var(--lb-border)',
-      display: 'flex', flexDirection: 'column',
-      overflowY: 'auto', flexShrink: 0,
-    }}>
-      {MODULES.map(mod => (
-        <div key={mod.id} style={{ borderBottom: '1px solid var(--lb-border)' }}>
-          <div
-            onClick={() => toggle(mod.id)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 7,
-              padding: '7px 12px', cursor: 'pointer',
-              userSelect: 'none', fontSize: 10,
-              letterSpacing: '0.8px', color: 'var(--lb-muted)',
-            }}
-          >
-            <div style={{
-              width: 7, height: 7, borderRadius: '50%',
-              background: activeModules.includes(mod.id) ? mod.color : 'var(--lb-border)',
-              cursor: 'pointer', flexShrink: 0,
-            }}
-              onClick={(e) => { e.stopPropagation(); toggleModule(mod.id) }}
-              title={activeModules.includes(mod.id) ? 'Désactiver module' : 'Activer module'}
-            />
-            {mod.label}
-            <span style={{ marginLeft: 'auto', fontSize: 9 }}>
-              {open.includes(mod.id) ? '▾' : '▸'}
-            </span>
-          </div>
+    <aside style={sidebarStyle}>
+      {Object.entries(byModule).map(([moduleId, categories]) => {
+        const color   = getColor(moduleId)
+        const isOpen  = open[moduleId] !== false
 
-          {open.includes(mod.id) && (
-            <div style={{ padding: '2px 6px 8px' }}>
-              {mod.components.map(comp => (
-                <div
-                  key={comp.type}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, comp, mod.id)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    padding: '5px 8px', borderRadius: 4,
-                    cursor: 'grab', fontSize: 11,
-                    color: activeModules.includes(mod.id) ? 'var(--lb-text)' : 'var(--lb-muted)',
-                    border: '1px solid transparent',
-                    transition: 'all .1s', marginBottom: 2,
-                  }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.background = '#1a2740'
-                    e.currentTarget.style.borderColor = 'var(--lb-border)'
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.background = 'transparent'
-                    e.currentTarget.style.borderColor = 'transparent'
-                  }}
-                >
-                  <div style={{
-                    width: 16, height: 16, borderRadius: 3,
-                    background: `${mod.color}22`,
-                    color: mod.color, display: 'flex',
-                    alignItems: 'center', justifyContent: 'center',
-                    fontSize: 9, flexShrink: 0,
-                  }}>
-                    {comp.icon}
-                  </div>
-                  {comp.label}
-                </div>
-              ))}
+        return (
+          <div key={moduleId} style={{ borderBottom:'1px solid var(--lb-border)' }}>
+
+            {/* En-tête module */}
+            <div
+              onClick={() => toggleModule(moduleId)}
+              style={{
+                display:    'flex',
+                alignItems: 'center',
+                gap:        8,
+                padding:    '8px 12px',
+                cursor:     'pointer',
+                userSelect: 'none',
+              }}
+            >
+              <div style={{
+                width:        6,
+                height:       6,
+                borderRadius: '50%',
+                background:   color,
+                flexShrink:   0,
+              }}/>
+              <span style={{
+                fontSize:      10,
+                fontWeight:    600,
+                color:         'var(--lb-muted)',
+                letterSpacing: '.6px',
+                flex:          1,
+                textTransform: 'uppercase',
+              }}>
+                {getPluginName(moduleId)}
+              </span>
+              <span style={{ fontSize:9, color:'var(--lb-hint)' }}>
+                {isOpen ? '▾' : '▸'}
+              </span>
             </div>
-          )}
-        </div>
-      ))}
+
+            {/* Composants */}
+            {isOpen && Object.entries(categories).map(([cat, comps]) => (
+              <div key={cat}>
+                {Object.keys(categories).length > 1 && (
+                  <div style={{
+                    padding:   '2px 16px',
+                    fontSize:  9,
+                    color:     'var(--lb-hint)',
+                    letterSpacing: '.4px',
+                  }}>
+                    {cat}
+                  </div>
+                )}
+                <div style={{ padding:'2px 6px 8px' }}>
+                  {comps.map(comp => (
+                    <CompItem
+                      key={comp.type}
+                      comp={comp}
+                      color={color}
+                      onDragStart={handleDragStart}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      })}
+
+      {/* Pied de sidebar */}
+      <div style={{
+        marginTop:   'auto',
+        padding:     '8px 12px',
+        borderTop:   '1px solid var(--lb-border)',
+        fontSize:    9,
+        color:       'var(--lb-hint)',
+        fontFamily:  'var(--font-mono)',
+      }}>
+        {registry.getAll().length} plugin(s) · {allComps.length} composants
+      </div>
+    </aside>
+  )
+}
+
+function CompItem({ comp, color, onDragStart }) {
+  const [hover, setHover] = useState(false)
+
+  return (
+    <div
+      draggable
+      onDragStart={e => onDragStart(e, comp)}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display:      'flex',
+        alignItems:   'center',
+        gap:          8,
+        padding:      '5px 8px',
+        borderRadius: 'var(--radius-md)',
+        cursor:       'grab',
+        background:   hover ? 'var(--lb-bg)' : 'transparent',
+        border:       `1px solid ${hover ? 'var(--lb-border)' : 'transparent'}`,
+        marginBottom: 2,
+        transition:   'all .1s',
+      }}
+    >
+      <div style={{
+        width:        18,
+        height:       18,
+        borderRadius: 3,
+        background:   `${color}18`,
+        border:       `1px solid ${color}44`,
+        display:      'flex',
+        alignItems:   'center',
+        justifyContent: 'center',
+        fontSize:     10,
+        color:        color,
+        flexShrink:   0,
+      }}>
+        {comp.icon}
+      </div>
+      <span style={{
+        fontSize:  11,
+        color:     hover ? 'var(--lb-text)' : '#555',
+        fontFamily:'var(--font-ui)',
+      }}>
+        {comp.label}
+      </span>
     </div>
   )
+}
+
+const sidebarStyle = {
+  width:        200,
+  background:   'var(--lb-surface)',
+  borderRight:  '1px solid var(--lb-border)',
+  display:      'flex',
+  flexDirection:'column',
+  overflowY:    'auto',
+  flexShrink:   0,
 }

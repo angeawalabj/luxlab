@@ -1,46 +1,70 @@
 import { create } from 'zustand'
+import { registry } from '../core/plugin-api'
 
 export const useSimStore = create((set, get) => ({
 
-  // ─── Canvas ─────────────────────────────────────────────────────
   components:  [],
   connections: [],
-  selectedIds: [],
-
-  // ─── Simulation ─────────────────────────────────────────────────
   isRunning:   false,
   results:     {},
 
-  // ─── Actions composants ──────────────────────────────────────────
+  // ─── Composants ──────────────────────────────────────────────────
 
-  addComponent: (comp) => set(s => ({
-    components: [
-      ...s.components,
-      { id: `${comp.type}-${Date.now()}`, ...comp }
-    ]
-  })),
+  addComponent: (typeDef, x, y) => {
+    const def = registry.getComponentDef(typeDef.type)
+    if (!def) {
+      console.warn(`[Store] Composant inconnu : ${typeDef.type}`)
+      return
+    }
+    const comp = {
+      id:       `${typeDef.type}-${Date.now()}`,
+      type:     typeDef.type,
+      pluginId: def.pluginId,
+      moduleId: def.moduleId,
+      label:    def.label,
+      x:        Math.round(x),
+      y:        Math.round(y),
+      params:   { ...def.defaultParams, ...(typeDef.params || {}) },
+    }
+    registry.fireHook('componentAdd', comp)
+    set(s => ({ components: [...s.components, comp] }))
+  },
 
   updateComponent: (id, patch) => set(s => ({
-    components: s.components.map(c => c.id === id ? { ...c, ...patch } : c)
-  })),
-
-  updateParam: (id, key, value) => set(s => ({
     components: s.components.map(c =>
-      c.id === id ? { ...c, params: { ...c.params, [key]: value } } : c
+      c.id === id ? { ...c, ...patch } : c
     )
   })),
 
-  removeComponent: (id) => set(s => ({
-    components: s.components.filter(c => c.id !== id),
-    selectedIds: s.selectedIds.filter(sid => sid !== id),
-  })),
+  updateParam: (id, key, value) => {
+    set(s => ({
+      components: s.components.map(c =>
+        c.id === id
+          ? { ...c, params: { ...c.params, [key]: value } }
+          : c
+      )
+    }))
+    registry.fireHook('paramChange', { id, key, value })
+  },
 
-  setComponents:   (comps) => set({ components: comps }),
-  setSelectedIds:  (ids)   => set({ selectedIds: ids }),
+  removeComponent: (id) => {
+    const comp = get().components.find(c => c.id === id)
+    registry.fireHook('componentRemove', comp)
+    set(s => ({
+      components:  s.components.filter(c => c.id !== id),
+    }))
+  },
 
-  // ─── Actions simulation ──────────────────────────────────────────
+  setComponents: (comps) => set({ components: comps }),
 
-  toggleSim: () => set(s => ({ isRunning: !s.isRunning, results: {} })),
-  setResults: (results) => set({ results }),
-  clearResults: () => set({ results: {} }),
+  // ─── Simulation ──────────────────────────────────────────────────
+
+  toggleSim: () => {
+    const next = !get().isRunning
+    set({ isRunning: next, results: next ? get().results : {} })
+    registry.fireHook(next ? 'simStart' : 'simStop', get().components)
+  },
+
+  setResults:   (r) => set({ results: r }),
+  clearResults: ()  => set({ results: {} }),
 }))
