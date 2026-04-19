@@ -13,7 +13,7 @@ const plugin = new LuxPlugin({
 
 // ─── Composants ──────────────────────────────────────────────────
 
-plugin.component({
+plugin.addComponent({
   type:     'slit2',
   label:    'Fentes de Young',
   icon:     '⫿',
@@ -48,7 +48,7 @@ plugin.component({
   render: () => ({ shape:'slit', color:'#2980b9' }),
 })
 
-plugin.component({
+plugin.addComponent({
   type:     'grating',
   label:    'Réseau de diffraction',
   icon:     '|||',
@@ -76,7 +76,7 @@ plugin.component({
   render: () => ({ shape:'grating', color:'#2980b9' }),
 })
 
-plugin.component({
+plugin.addComponent({
   type:     'polarizer',
   label:    'Polariseur',
   icon:     '↕',
@@ -105,7 +105,7 @@ plugin.component({
   render: () => ({ shape:'rect', color:'#2980b9' }),
 })
 
-plugin.component({
+plugin.addComponent({
   type:     'beamsplitter',
   label:    'Séparateur de faisceau',
   icon:     '⊡',
@@ -131,7 +131,7 @@ plugin.component({
 
 // ─── Moteur ondulatoire (JS pur en attendant WASM) ────────────────
 
-plugin.engine({
+plugin.addEngine({
   id:   '@luxlab/wave-optics/engine',
   name: 'Moteur Ondulatoire',
 
@@ -188,7 +188,7 @@ plugin.engine({
 
 // ─── Panneau résultats ────────────────────────────────────────────
 
-plugin.panel({
+plugin.addPanel({
   id:        '@luxlab/wave-optics/results',
   title:     'Ondulatoire',
   icon:      '≈',
@@ -198,7 +198,7 @@ plugin.panel({
 
 // ─── Templates ───────────────────────────────────────────────────
 
-plugin.template({
+plugin.addTemplate({
   id:          'young-fringes',
   title:       'Fentes de Young',
   description: 'Franges d\'interférence. λ = 632 nm, d = 0.5 mm.',
@@ -215,7 +215,7 @@ plugin.template({
   ],
 })
 
-plugin.template({
+plugin.addTemplate({
   id:          'grating-spectrum',
   title:       'Réseau de diffraction',
   description: 'Diffraction d\'une source monochromatique. 600 t/mm.',
@@ -234,7 +234,7 @@ plugin.template({
 
 // ─── Expériences ─────────────────────────────────────────────────
 
-plugin.experience({
+plugin.addExperience({
   id:               'exp-young-measure',
   title:            'Mesure de λ par les fentes de Young',
   description:      'Déterminer la longueur d\'onde d\'un laser par la mesure de l\'interfrange.',
@@ -299,7 +299,7 @@ plugin.experience({
   },
 })
 
-plugin.i18n('fr', {
+plugin.addI18n('fr', {
   'slit2.label':       'Fentes de Young',
   'grating.label':     'Réseau de diffraction',
   'polarizer.label':   'Polariseur',
@@ -307,7 +307,7 @@ plugin.i18n('fr', {
   'screenDistance.label': 'Distance écran D (mm)',
 })
 
-plugin.i18n('en', {
+plugin.addI18n('en', {
   'slit2.label':       'Double slit',
   'grating.label':     'Diffraction grating',
   'polarizer.label':   'Polarizer',

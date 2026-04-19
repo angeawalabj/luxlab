@@ -65,18 +65,30 @@ export default function SimCanvas() {
   }, [results, isRunning, size, zoom, pan, components])
 
   // ─── Lancer la simulation automatiquement ────────────────────────
-  useEffect(() => {
-    if (!isRunning) return
-    const opts = buildOptions(fidelity)
+// Lancer la simulation via le moteur du registry
+useEffect(() => {
+  if (!isRunning || components.length === 0) return
 
-    bridge.runSimulation(components, opts)
-      .then(result => setResults(result))
-      .catch(err => {
-        if (err.message !== 'cancelled')
-          console.warn('[Canvas] Simulation:', err.message)
-      })
-  }, [components, isRunning, fidelity])
+  const engine = registry.getEngineFor(components)
+  if (!engine) {
+    console.warn('[Canvas] Aucun moteur trouvé pour', components.map(c=>c.type))
+    return
+  }
 
+  const opts   = buildOptions(fidelity)
+
+  // run() peut être sync ou async
+  const run = async () => {
+    try {
+      const result = await Promise.resolve(engine.run(components, opts))
+      setResults(result)
+    } catch (err) {
+      console.warn('[Canvas] Erreur moteur :', err.message)
+    }
+  }
+
+  run()
+}, [components, isRunning, fidelity])
   // ─── Drop depuis sidebar ─────────────────────────────────────────
   const handleDrop = useCallback((e) => {
     e.preventDefault()

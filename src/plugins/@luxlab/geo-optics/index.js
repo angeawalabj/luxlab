@@ -13,7 +13,7 @@ const plugin = new LuxPlugin({
 
 // ─── Composants ──────────────────────────────────────────────────
 
-plugin.component({
+plugin.addComponent({
   type:     'source',
   label:    'Source lumineuse',
   icon:     '✦',
@@ -56,7 +56,7 @@ plugin.component({
   }),
 })
 
-plugin.component({
+plugin.addComponent({
   type:     'lens',
   label:    'Lentille mince',
   icon:     '◎',
@@ -97,7 +97,7 @@ plugin.component({
   render: () => ({ shape: 'lens', color: '#2980b9' }),
 })
 
-plugin.component({
+plugin.addComponent({
   type:     'mirror',
   label:    'Miroir plan',
   icon:     '⌒',
@@ -131,7 +131,7 @@ plugin.component({
   render: () => ({ shape: 'mirror', color: '#e67e22' }),
 })
 
-plugin.component({
+plugin.addComponent({
   type:     'prism',
   label:    'Prisme',
   icon:     '▽',
@@ -167,7 +167,7 @@ plugin.component({
   render: () => ({ shape: 'triangle', color: '#8e44ad' }),
 })
 
-plugin.component({
+plugin.addComponent({
   type:     'screen',
   label:    'Écran / Détecteur',
   icon:     '▪',
@@ -199,7 +199,7 @@ plugin.component({
   render: () => ({ shape: 'screen', color: '#16a085' }),
 })
 
-plugin.component({
+plugin.addComponent({
   type:     'blocker',
   label:    'Obstacle opaque',
   icon:     '▬',
@@ -224,25 +224,24 @@ plugin.component({
 })
 
 // ─── Moteur physique ──────────────────────────────────────────────
-
-plugin.engine({
+plugin.addEngine({
   id:   '@luxlab/geo-optics/engine',
   name: 'Ray Tracer Géométrique',
 
   canHandle: (components) =>
     components.some(c =>
-      ['source', 'lens', 'mirror', 'prism', 'screen', 'blocker'].includes(c.type)
+      ['source','lens','mirror','prism','screen','blocker'].includes(c.type)
     ),
 
-  // Le moteur délègue le calcul au WASM via le bridge
-  run: async (components, options) => {
-    const { bridge } = await import('../../../core/SimulationBridge.js')
-    return bridge.runSimulation(components, options)
+  // Import direct — pas d'import dynamique dans engine.run
+  run: (components, options) => {
+    // Le moteur JS pur en fallback pendant le dev
+    // Le WASM sera branché ici à l'étape suivante
+    return runGeoJS(components, options)
   },
 
   renderResult: (ctx2d, result) => {
     if (!result?.rays) return
-
     for (const ray of result.rays) {
       const color = wavelengthToCSS(ray.wl)
       ctx2d.strokeStyle = color
@@ -250,34 +249,25 @@ plugin.engine({
       ctx2d.globalAlpha = 0.82
       ctx2d.shadowColor = color
       ctx2d.shadowBlur  = 4
-
       ctx2d.beginPath()
       ray.segments.forEach((pt, i) =>
         i === 0 ? ctx2d.moveTo(pt.x, pt.y) : ctx2d.lineTo(pt.x, pt.y)
       )
       ctx2d.stroke()
     }
-
-    // Points d'intersection
     ctx2d.shadowBlur  = 0
     ctx2d.globalAlpha = 1
 
     const colors = {
-      refraction: '#2980b9',
-      reflection: '#e67e22',
-      dispersion: '#8e44ad',
-      detection:  '#27ae60',
-      blocked:    '#e74c3c',
+      refraction:'#2980b9', reflection:'#e67e22',
+      dispersion:'#8e44ad', detection:'#27ae60', blocked:'#e74c3c',
     }
-
     for (const pt of (result.intersections || [])) {
       ctx2d.beginPath()
       ctx2d.arc(pt.x, pt.y, 3, 0, Math.PI * 2)
       ctx2d.fillStyle = colors[pt.type] || '#7f8c8d'
       ctx2d.fill()
     }
-
-    // Images conjuguées
     for (const img of (result.images || [])) {
       ctx2d.beginPath()
       ctx2d.arc(img.x, img.y, 5, 0, Math.PI * 2)
@@ -286,21 +276,15 @@ plugin.engine({
       ctx2d.setLineDash(img.real ? [] : [4, 3])
       ctx2d.stroke()
       ctx2d.setLineDash([])
-
       ctx2d.fillStyle = '#7f8c8d'
       ctx2d.font      = '9px Courier New'
-      ctx2d.fillText(
-        `m=${img.magnification.toFixed(2)}`,
-        img.x + 8,
-        img.y - 5
-      )
+      ctx2d.fillText(`m=${img.magnification.toFixed(2)}`, img.x + 8, img.y - 5)
     }
   },
 })
-
 // ─── Panneau résultats ────────────────────────────────────────────
 
-plugin.panel({
+plugin.addPanel({
   id:        '@luxlab/geo-optics/results',
   title:     'Résultats',
   icon:      '◎',
@@ -310,7 +294,7 @@ plugin.panel({
 
 // ─── Templates ───────────────────────────────────────────────────
 
-plugin.template({
+plugin.addTemplate({
   id:          'telescope-galileo',
   title:       'Télescope de Galilée',
   description: 'Système afocal. G = −f_obj / f_oeil.',
@@ -329,7 +313,7 @@ plugin.template({
   ],
 })
 
-plugin.template({
+plugin.addTemplate({
   id:          'simple-diverging',
   title:       'Lentille divergente',
   description: 'Image virtuelle — relation de conjugaison avec f < 0.',
@@ -348,7 +332,7 @@ plugin.template({
 
 // ─── Expériences ─────────────────────────────────────────────────
 
-plugin.experience({
+plugin.addExperience({
   id:               'exp-conjugate',
   title:            "Relation conjuguée d'une lentille",
   description:      "Vérifier la relation 1/OA' − 1/OA = 1/f' expérimentalement.",
@@ -413,7 +397,7 @@ plugin.experience({
 
 // ─── i18n ─────────────────────────────────────────────────────────
 
-plugin.i18n('fr', {
+plugin.addI18n('fr', {
   'source.label':          'Source lumineuse',
   'lens.label':            'Lentille mince',
   'mirror.label':          'Miroir plan',
@@ -425,7 +409,7 @@ plugin.i18n('fr', {
   'refractiveIndex.label': 'Indice de réfraction',
 })
 
-plugin.i18n('en', {
+plugin.addI18n('en', {
   'source.label':          'Light source',
   'lens.label':            'Thin lens',
   'mirror.label':          'Flat mirror',
@@ -437,7 +421,7 @@ plugin.i18n('en', {
   'refractiveIndex.label': 'Refractive index',
 })
 
-plugin.i18n('ar', {
+plugin.addI18n('ar', {
   'source.label':      'مصدر ضوئي',
   'lens.label':        'عدسة رقيقة',
   'wavelength.label':  'الطول الموجي (نانومتر)',
@@ -446,7 +430,7 @@ plugin.i18n('ar', {
 
 // ─── Settings ────────────────────────────────────────────────────
 
-plugin.settings([
+plugin.addSettings([
   {
     key:     'showConjugateImages',
     label:   'Afficher les images conjuguées',
@@ -464,7 +448,109 @@ plugin.settings([
 plugin.onLoad(() => {
   console.log('[geo-optics] Plugin chargé')
 })
+// ─── Moteur JS pur (fallback avant WASM) ─────────────────────────
 
+function runGeoJS(components, options = {}) {
+  const result  = { rays:[], intersections:[], images:[] }
+  const source  = components.find(c => c.type === 'source')
+  if (!source) return result
+
+  const wl       = source.params?.wavelength || 550
+  const numRays  = options.numRays  || 7
+  const maxX     = options.rayLength || 1200
+  const spread   = 60
+
+  const obstacles = components
+    .filter(c => ['lens','mirror','prism','screen','blocker'].includes(c.type))
+    .sort((a, b) => a.x - b.x)
+    .filter(c => c.x > source.x)
+
+  for (let i = 0; i < numRays; i++) {
+    const offset = numRays > 1
+      ? (i - Math.floor(numRays / 2)) * (spread / (numRays - 1))
+      : 0
+
+    let x     = source.x + 25
+    let y     = source.y + offset
+    let angle = 0
+    let alive = true
+    const segments = [{ x, y }]
+
+    for (const obs of obstacles) {
+      if (!alive || obs.x <= x) continue
+      const dx = obs.x - x
+      y = y + dx * Math.tan(angle)
+      x = obs.x
+      segments.push({ x, y })
+
+      if (obs.type === 'lens') {
+        const f = obs.params?.focalLength || 50
+        if (Math.abs(f) > 1e-10) {
+          angle -= (y - obs.y) / f
+        }
+        result.intersections.push({ x, y, type:'refraction' })
+      }
+      if (obs.type === 'mirror') {
+        const a = (obs.params?.angle || 45) * Math.PI / 180
+        angle = -angle + 2 * a
+        result.intersections.push({ x, y, type:'reflection' })
+      }
+      if (obs.type === 'prism') {
+        const n    = obs.params?.refractiveIndex || 1.52
+        const apex = (obs.params?.apexAngle || 60) * Math.PI / 180
+        const dn   = 0.008 * (550 - wl) / 100
+        angle += (n + dn - 1) * apex
+        result.intersections.push({ x, y, type:'dispersion' })
+      }
+      if (obs.type === 'screen') {
+        alive = false
+        result.intersections.push({ x, y, type:'detection' })
+      }
+      if (obs.type === 'blocker') {
+        const h = obs.params?.height || 60
+        if (Math.abs(y - obs.y) < h / 2) {
+          alive = false
+          result.intersections.push({ x, y, type:'blocked' })
+        }
+      }
+    }
+
+    if (alive) {
+      segments.push({
+        x: maxX,
+        y: y + (maxX - x) * Math.tan(angle),
+      })
+    }
+
+    result.rays.push({ segments, wl })
+  }
+
+  // Images conjuguées
+  const lenses = obstacles.filter(c => c.type === 'lens')
+  if (lenses.length > 0) {
+    let xObj = source.x
+    let yObj = source.y
+    for (const lens of lenses) {
+      const f = lens.params?.focalLength || 50
+      const d = lens.x - xObj
+      if (Math.abs(d) < 1e-10 || Math.abs(d - f) < 1e-10) continue
+      const di = (d * f) / (d - f)
+      const m  = -di / d
+      result.images.push({
+        x:             lens.x + di,
+        y:             lens.y + m * (yObj - lens.y),
+        magnification: m,
+        real:          di > 0,
+        fromLens:      lens.id,
+      })
+      xObj = lens.x + di
+      yObj = lens.y + m * (yObj - lens.y)
+    }
+  }
+
+  result.durationMs = 0
+  return result
+}
 export default plugin
 
 // ─── Utilitaire couleur ───────────────────────────────────────────

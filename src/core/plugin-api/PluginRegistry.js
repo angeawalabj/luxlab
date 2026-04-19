@@ -151,10 +151,10 @@ class PluginRegistry {
    * @param {string} locale
    * @returns {Object}
    */
-  getI18n(locale) {
+getI18n(locale) {
     const merged = {}
     for (const plugin of this.getAll()) {
-      Object.assign(merged, plugin.i18n[locale] || {})
+      Object.assign(merged, plugin.translations[locale] || {})  // ← translations
     }
     return merged
   }
@@ -220,7 +220,7 @@ class PluginRegistry {
   /**
    * Affiche un résumé du registre dans la console.
    */
-  debug() {
+debug() {
     console.group('[LuxLab Registry]')
     console.log(`${this.#plugins.size} plugin(s) chargé(s)`)
     for (const plugin of this.getAll()) {

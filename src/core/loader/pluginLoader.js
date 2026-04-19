@@ -58,20 +58,25 @@ export async function loadUserPlugins() {
  * Point d'entrée principal.
  * Charge tous les plugins dans le bon ordre.
  */
+
 export async function loadAll() {
-  // 1. Lire les préférences
-  const prefs = JSON.parse(
-    localStorage.getItem('luxlab:active-plugins') || '[]'
-  )
+  console.log('[Loader] Début chargement plugins...')
 
-  // 2. Charger les plugins officiels
-  await loadOfficialPlugins(prefs)
+  for (const loader of OFFICIAL_PLUGINS) {
+    try {
+      const mod = await loader()
+      console.log('[Loader] Module importé :', mod)
 
-  // 3. Charger les plugins utilisateur
-  await loadUserPlugins()
+      const plugin = mod.default
+      console.log('[Loader] Plugin :', plugin?.id, plugin?.constructor?.name)
 
-  // 4. Debug en développement
-  if (import.meta.env.DEV) {
-    registry.debug()
+      await registry.register(plugin)
+    } catch (err) {
+      // Afficher l'erreur COMPLÈTE sans la cacher
+      console.error('[Loader] ERREUR chargement plugin :', err)
+    }
   }
+
+  console.log('[Loader] Fin. Composants :', registry.getAllComponents().length)
+  registry.debug()
 }

@@ -4,24 +4,36 @@ import './index.css'
 import SplashScreen             from './ui/SplashScreen'
 import Layout                   from './ui/Layout'
 import { loadAll }              from './core/loader/pluginLoader'
+import { registry }             from './core/plugin-api'
 
 async function bootstrap() {
-  await loadAll()
+  console.log('[Bootstrap] Démarrage...')
 
-  createRoot(document.getElementById('root')).render(
+  try {
+    await loadAll()
+  } catch (err) {
+    console.error('[Bootstrap] Erreur loadAll :', err)
+  }
+
+  console.log('[Bootstrap] Plugins chargés :',
+    registry.getAll().map(p => p.id))
+  console.log('[Bootstrap] Composants :',
+    registry.getAllComponents().map(c => c.type))
+
+  const root = document.getElementById('root')
+  createRoot(root).render(
     <StrictMode>
-      <Root/>
+      <Root />
     </StrictMode>
   )
 }
 
 function Root() {
   const [ready, setReady] = useState(false)
-
   return (
     <>
-      {!ready && <SplashScreen onDone={() => setReady(true)}/>}
-      {ready  && <Layout/>}
+      {!ready && <SplashScreen onDone={() => setReady(true)} />}
+      {ready  && <Layout />}
     </>
   )
 }
