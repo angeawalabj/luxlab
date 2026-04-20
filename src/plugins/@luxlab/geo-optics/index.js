@@ -42,6 +42,12 @@ plugin.addComponent({
       key: 'polarization', label: 'Polarisation',
       type: 'select', options: ['none', 'linear', 'circular'],
     },
+    // Dans addComponent source, ajoute dans paramsDef :
+{
+  key:'sourceType', label:'Type de source',
+  type:'select',
+  options:['monochromatique','polychromatique','laser'],
+},
   ],
   simulate: (params, ctx) => ({
     type:   'ray-source',
@@ -94,7 +100,11 @@ plugin.addComponent({
     f:        params.focalLength,
     d:        params.diameter,
   }),
-  render: () => ({ shape: 'lens', color: '#2980b9' }),
+  render: (props) => {
+  const h = (props?.params?.diameter || 40) * 0.8  // pixels proportionnels
+  return { shape:'lens', color:'#2980b9', height: h }
+},
+
 })
 
 plugin.addComponent({
@@ -196,9 +206,45 @@ plugin.addComponent({
     type:     'screen',
     position: ctx?.position,
   }),
-  render: () => ({ shape: 'screen', color: '#16a085' }),
+render: (props) => {
+  const h = (props?.params?.height || 80) * 0.8
+  return { shape:'screen', color:'#16a085', height: h }
+},
 })
-
+plugin.addComponent({
+  type:     'filter',
+  label:    'Filtre spectral',
+  icon:     '▨',
+  moduleId: '@luxlab/geo-optics',
+  category: 'Éléments optiques',
+  defaultParams: {
+    centerWL:   550,
+    bandwidth:  50,
+    transmittance: 1.0,
+  },
+  paramsDef: [
+    {
+      key:'centerWL', label:'λ centrale (nm)',
+      type:'range', min:380, max:780, step:1,
+    },
+    {
+      key:'bandwidth', label:'Bande passante (nm)',
+      type:'range', min:5, max:200, step:5,
+    },
+    {
+      key:'transmittance', label:'Transmittance max',
+      type:'range', min:0, max:1, step:0.05,
+    },
+  ],
+  simulate: (params, ctx) => ({
+    type:'filter', position:ctx?.position,
+    centerWL:params.centerWL, bandwidth:params.bandwidth,
+  }),
+  render: (props) => ({
+    shape: 'filter',
+    color: wlToCSS(props?.params?.centerWL || 550),
+  }),
+})
 plugin.addComponent({
   type:     'blocker',
   label:    'Obstacle opaque',
@@ -461,6 +507,10 @@ function runGeoJS(components, options = {}) {
   if (!source) return result
 
   const wl        = source.params?.wavelength  || 550
+  const sourceType   = source.params?.sourceType || 'monochromatique'
+const wavelengths  = sourceType === 'polychromatique'
+  ? [440, 490, 550, 590, 650]   // violet, bleu, vert, jaune, rouge
+  : [wl]
   const intensity = source.params?.intensity   || 1.0
   const coherence = source.params?.coherence   || 'high'
 
@@ -479,12 +529,14 @@ function runGeoJS(components, options = {}) {
     .sort((a, b) => a.x - b.x)
     .filter(c => c.x > source.x)
 
-  for (let i = 0; i < numRays; i++) {
-    const offset = numRays > 1
-      ? (i - Math.floor(numRays / 2)) * (spread / (numRays - 1))
+for (const currentWL of wavelengths) {
+  const raysForWL = sourceType === 'polychromatique' ? 3 : numRays
+
+  for (let i = 0; i < raysForWL; i++) {
+    const offset = raysForWL > 1
+      ? (i - Math.floor(raysForWL / 2)) * (spread / Math.max(raysForWL - 1, 1))
       : 0
 
-    // La cohérence basse ajoute une légère déviation aléatoire (déterministe)
     const angleNoise = extraSpread > 0
       ? ((i * 7919) % 100 - 50) / 1000 * (extraSpread / 10)
       : 0
@@ -503,32 +555,61 @@ function runGeoJS(components, options = {}) {
       segments.push({ x, y })
 
       if (obs.type === 'lens') {
-        const f = obs.params?.focalLength || 50
-        if (Math.abs(f) > 1e-10) angle -= (y - obs.y) / f
-        result.intersections.push({ x, y, type:'refraction' })
+        const f        = obs.params?.focalLength || 50
+        const diameter = obs.params?.diameter   || 40
+        const halfD    = diameter * 0.4
+
+        if (Math.abs(y - obs.y) > halfD) {
+          alive = false
+          result.intersections.push({ x, y, type:'blocked' })
+        } else {
+          if (Math.abs(f) > 1e-10) angle -= (y - obs.y) / f
+          result.intersections.push({ x, y, type:'refraction' })
+        }
       }
+
       if (obs.type === 'mirror') {
         const a = (obs.params?.angle || 45) * Math.PI / 180
         angle = -angle + 2 * a
         result.intersections.push({ x, y, type:'reflection' })
       }
+
       if (obs.type === 'prism') {
         const mat  = obs.params?.material || 'BK7'
         const apex = (obs.params?.apexAngle || 60) * Math.PI / 180
-        const n    = refractiveIndex(mat, wl)
-        const dn   = 0.008 * (550 - wl) / 100
+        const n    = refractiveIndex(mat, currentWL)
+        const dn   = 0.008 * (550 - currentWL) / 100
         angle += (n + dn - 1) * apex
         result.intersections.push({ x, y, type:'dispersion' })
       }
+
       if (obs.type === 'screen') {
         alive = false
         result.intersections.push({ x, y, type:'detection' })
       }
+
       if (obs.type === 'blocker') {
         const h = obs.params?.height || 60
         if (Math.abs(y - obs.y) < h / 2) {
           alive = false
           result.intersections.push({ x, y, type:'blocked' })
+        }
+      }
+
+      if (obs.type === 'filter') {
+        const center    = obs.params?.centerWL    || 550
+        const bandwidth = obs.params?.bandwidth   || 50
+        const T         = obs.params?.transmittance || 1.0
+        const dist      = Math.abs(currentWL - center)
+
+        const sigma = bandwidth / 2.355
+        const transmission = T * Math.exp(-(dist * dist) / (2 * sigma * sigma))
+
+        if (transmission < 0.05) {
+          alive = false
+          result.intersections.push({ x, y, type:'blocked' })
+        } else {
+          result.intersections.push({ x, y, type:'refraction' })
         }
       }
     }
@@ -540,9 +621,9 @@ function runGeoJS(components, options = {}) {
       })
     }
 
-    // L'intensité affecte l'opacité des rayons
-    result.rays.push({ segments, wl, intensity })
+    result.rays.push({ segments, wl: currentWL, intensity })
   }
+}
 
   // Images conjuguées
   const lenses = obstacles.filter(c => c.type === 'lens')

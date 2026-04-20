@@ -245,11 +245,17 @@ useEffect(() => {
 // ─── Composant SVG ────────────────────────────────────────────────
 
 function CompNode({ comp, def, selected, onMouseDown }) {
-  const render = def.render?.() || {}
-  const color  = MODULE_COLORS[comp.moduleId] || '#7f8c8d'
+  const render   = def.render?.({ params: comp.params }) || {}
+  const color    = MODULE_COLORS[comp.moduleId] || '#7f8c8d'
   const isLens   = render.shape === 'lens'
   const isScreen = render.shape === 'screen'
+  const isFilter = render.shape === 'filter'
+
   const isMirror = render.shape === 'mirror'
+
+  // Hauteur physique proportionnelle (en pixels canvas)
+  const ry = render.height ? render.height / 2 : 36
+  const screenH = render.height ? render.height / 2 : 45
 
   return (
     <g
@@ -258,38 +264,46 @@ function CompNode({ comp, def, selected, onMouseDown }) {
       onMouseDown={onMouseDown}
       onClick={e => e.stopPropagation()}
     >
-      {/* Halo de sélection */}
       {selected && (
         <rect
-          x={-28} y={-28} width={56} height={56}
-          rx={10}
-          fill="none"
-          stroke={color}
-          strokeWidth={1}
-          strokeDasharray="4 3"
-          opacity={0.5}
+          x={-28} y={-(ry + 8)} width={56} height={(ry + 8) * 2}
+          rx={8} fill="none"
+          stroke={color} strokeWidth={1}
+          strokeDasharray="4 3" opacity={0.5}
         />
       )}
 
       {isLens ? (
-        <ellipse
-          rx={10} ry={36}
-          fill={`${color}18`}
-          stroke={selected ? color : `${color}99`}
-          strokeWidth={selected ? 2 : 1.5}
-        />
+        <>
+          <ellipse
+            rx={10} ry={ry}
+            fill={`${color}18`}
+            stroke={selected ? color : `${color}99`}
+            strokeWidth={selected ? 2 : 1.5}
+          />
+          {/* Lignes de graduation */}
+          <line x1={-10} y1={0} x2={10} y2={0}
+            stroke={`${color}44`} strokeWidth={0.5}/>
+        </>
       ) : isScreen ? (
         <rect
-          x={-5} y={-45} width={10} height={90} rx={2}
+          x={-5} y={-screenH} width={10} height={screenH * 2} rx={2}
           fill={`${color}22`}
           stroke={selected ? color : `${color}99`}
           strokeWidth={selected ? 2 : 1.5}
         />
+
+      ) : isFilter ? (
+        <rect
+    x={-6} y={-40} width={12} height={80} rx={2}
+    fill={`${render.color}55`}
+    stroke={selected ? color : render.color}
+    strokeWidth={selected ? 2 : 1.5}
+  />
       ) : isMirror ? (
         <line
           x1={-30} y1={0} x2={30} y2={0}
-          stroke={color}
-          strokeWidth={selected ? 3 : 2}
+          stroke={color} strokeWidth={selected ? 3 : 2}
           strokeLinecap="round"
           transform={`rotate(${-(comp.params?.angle || 45)})`}
         />
@@ -302,41 +316,39 @@ function CompNode({ comp, def, selected, onMouseDown }) {
         />
       )}
 
-      {/* Icône */}
       {!isLens && !isScreen && !isMirror && (
-        <text
-          x={0} y={6}
-          textAnchor="middle"
-          fontSize={16}
-          fill={color}
-          style={{ pointerEvents:'none' }}
-        >
+        <text x={0} y={6} textAnchor="middle" fontSize={16}
+          fill={color} style={{ pointerEvents:'none' }}>
           {def.icon}
         </text>
       )}
 
-      {/* Label */}
       <text
-        x={0}
-        y={isLens || isScreen ? 56 : 34}
-        textAnchor="middle"
-        fontSize={9}
-        fill="var(--lb-muted)"
+        x={0} y={isLens ? ry + 12 : isScreen ? screenH + 12 : 34}
+        textAnchor="middle" fontSize={9} fill="var(--lb-muted)"
         style={{ pointerEvents:'none', fontFamily:'var(--font-mono)' }}
       >
         {comp.label}
       </text>
 
-      {/* λ pour la source */}
       {comp.type === 'source' && comp.params?.wavelength && (
         <text
-          x={0} y={isLens || isScreen ? 66 : 44}
-          textAnchor="middle"
-          fontSize={8}
+          x={0} y={46}
+          textAnchor="middle" fontSize={8}
           fill={wlToCSS(comp.params.wavelength)}
           style={{ pointerEvents:'none', fontFamily:'var(--font-mono)' }}
         >
           λ={comp.params.wavelength}nm
+        </text>
+      )}
+
+      {comp.type === 'lens' && comp.params?.focalLength && (
+        <text
+          x={0} y={ry + 22}
+          textAnchor="middle" fontSize={8} fill="var(--lb-hint)"
+          style={{ pointerEvents:'none', fontFamily:'var(--font-mono)' }}
+        >
+          f={comp.params.focalLength}mm
         </text>
       )}
     </g>

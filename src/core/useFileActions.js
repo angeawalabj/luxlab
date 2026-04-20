@@ -1,7 +1,8 @@
-import { saveLux, openLuxFile } from './formats/lux'
-import { exportPDF }            from './formats/exportPDF'
-import { useSimStore }          from '../store/useSimStore'
-import { useAppStore }          from '../store/useAppStore'
+import { saveLux, openLuxFile }            from './formats/lux'
+import { exportPDF }                        from './formats/exportPDF'
+import { useSimStore }                      from '../store/useSimStore'
+import { useAppStore }                      from '../store/useAppStore'
+import { clearSession }                     from './persistence'
 
 export function useFileActions() {
   const simStore = useSimStore()

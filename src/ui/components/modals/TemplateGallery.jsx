@@ -31,7 +31,25 @@ export default function TemplateGallery({ onClose }) {
     clearResults()
     onClose()
   }
-
+const loadItem = (item, type) => {
+    if (type === 'experiences') {
+      // Lancer l'expérience en mode guidé
+      const { setComponents, clearResults } = useSimStore.getState()
+      if (item.initialState?.components?.length > 0) {
+        setComponents(item.initialState.components)
+      } else {
+        setComponents([])
+      }
+      clearResults()
+      onLaunchExperience?.(item)
+      return
+    }
+    // Template normal
+    if (!window.confirm(`Charger "${item.title}" ? Le projet actuel sera remplacé.`)) return
+    useSimStore.getState().setComponents(item.components || [])
+    useSimStore.getState().clearResults()
+    onClose()
+  }
   const items = tab === 'templates' ? filter(allTemplates) : filter(allExperiences)
 
   return (
@@ -144,7 +162,7 @@ export default function TemplateGallery({ onClose }) {
   )
 }
 
-function ItemCard({ item, type, onLoad }) {
+function ItemCard({ item, type }) {
   const [hover, setHover] = useState(false)
 
   return (
@@ -234,7 +252,7 @@ function ItemCard({ item, type, onLoad }) {
       </div>
 
       {/* Bouton */}
-      <button onClick={onLoad} style={{
+      <button  onClick={() => loadItem(item, type)} style={{
         width:'100%', padding:'6px 0',
         borderRadius:4, border:'1px solid var(--lb-border)',
         background:'transparent',
@@ -254,7 +272,7 @@ function ItemCard({ item, type, onLoad }) {
           e.currentTarget.style.borderColor = 'var(--lb-border)'
         }}
       >
-        {type === 'templates' ? '⟶ Charger' : '▶ Lancer'}
+        {type === 'templates' ? '⟶ Charger' : '▶ Lancer l\'expérience'}
       </button>
     </div>
   )
