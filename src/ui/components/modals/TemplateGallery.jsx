@@ -8,7 +8,7 @@ const TABS   = [
   { id:'experiences', label:'Expériences' },
 ]
 
-export default function TemplateGallery({ onClose }) {
+export default function TemplateGallery({ onClose, onLaunchExperience }) {
   const [tab,    setTab]    = useState('templates')
   const [level,  setLevel]  = useState('Tous')
   const [search, setSearch] = useState('')
@@ -153,7 +153,7 @@ const loadItem = (item, type) => {
               key={item.id}
               item={item}
               type={tab}
-              onLoad={() => loadTemplate(item)}
+              onLoad={() => loadItem(item, tab)}
             />
           ))}
         </div>
@@ -162,7 +162,7 @@ const loadItem = (item, type) => {
   )
 }
 
-function ItemCard({ item, type }) {
+function ItemCard({ item, type, onLoad}) {
   const [hover, setHover] = useState(false)
 
   return (
@@ -252,7 +252,7 @@ function ItemCard({ item, type }) {
       </div>
 
       {/* Bouton */}
-      <button  onClick={() => loadItem(item, type)} style={{
+      <button  onClick={onLoad} style={{
         width:'100%', padding:'6px 0',
         borderRadius:4, border:'1px solid var(--lb-border)',
         background:'transparent',
