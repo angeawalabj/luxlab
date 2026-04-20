@@ -1,34 +1,59 @@
-import { create } from 'zustand'
+import { create }          from 'zustand'
+import { savePreferences } from '../core/persistence'
+
+let prefTimer = null
+function debouncedSavePrefs(state) {
+  clearTimeout(prefTimer)
+  prefTimer = setTimeout(() => {
+    savePreferences({
+      fidelity:         state.fidelity,
+      sidebarOpen:      state.sidebarOpen,
+      propsPanelOpen:   state.propsPanelOpen,
+      resultsPanelOpen: state.resultsPanelOpen,
+    })
+  }, 500)
+}
 
 export const useAppStore = create((set, get) => ({
 
-  // ─── Panneaux ────────────────────────────────────────────────────
   sidebarOpen:      true,
   propsPanelOpen:   true,
   resultsPanelOpen: true,
   focusMode:        false,
 
-  toggleSidebar:       () => set(s => ({ sidebarOpen:      !s.sidebarOpen })),
-  togglePropsPanel:    () => set(s => ({ propsPanelOpen:   !s.propsPanelOpen })),
-  toggleResultsPanel:  () => set(s => ({ resultsPanelOpen: !s.resultsPanelOpen })),
-  toggleFocusMode:     () => set(s => ({ focusMode:        !s.focusMode })),
+  toggleSidebar: () => set(s => {
+    const next = { sidebarOpen: !s.sidebarOpen }
+    debouncedSavePrefs({ ...s, ...next })
+    return next
+  }),
+  togglePropsPanel: () => set(s => {
+    const next = { propsPanelOpen: !s.propsPanelOpen }
+    debouncedSavePrefs({ ...s, ...next })
+    return next
+  }),
+  toggleResultsPanel: () => set(s => {
+    const next = { resultsPanelOpen: !s.resultsPanelOpen }
+    debouncedSavePrefs({ ...s, ...next })
+    return next
+  }),
+  toggleFocusMode: () => set(s => ({ focusMode: !s.focusMode })),
 
-  // ─── Canvas ──────────────────────────────────────────────────────
   zoom: 1.0,
   pan:  { x: 0, y: 0 },
 
   setZoom: (z) => set({ zoom: Math.min(Math.max(z, 0.15), 5.0) }),
   setPan:  (p) => set({ pan: p }),
 
-  // ─── Sélection ───────────────────────────────────────────────────
-  selectedId: null,
-  setSelected: (id) => set({ selectedId: id }),
+  selectedId:       null,
+  setSelected:      (id) => set({ selectedId: id }),
 
-  // ─── Simulation ──────────────────────────────────────────────────
   fidelity: 'standard',
-  setFidelity: (f) => set({ fidelity: f }),
+  setFidelity: (f) => set(s => {
+    const next = { fidelity: f }
+    debouncedSavePrefs({ ...s, ...next })
+    return next
+  }),
 
-  // ─── Collab ──────────────────────────────────────────────────────
-  collabOpen: false,
+  collabOpen:   false,
   toggleCollab: () => set(s => ({ collabOpen: !s.collabOpen })),
 }))

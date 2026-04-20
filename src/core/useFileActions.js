@@ -98,5 +98,13 @@ export function useFileActions() {
     }
   }
 
-  return { newProject, save, open, exportReport }
+const clearCanvas = () => {
+  if (!window.confirm('Effacer tous les composants du canvas ?')) return
+  simStore.setComponents([])
+  simStore.clearResults()
+  clearSession()
+  if (simStore.isRunning) simStore.toggleSim()
+}
+
+return { newProject, save, open, exportReport, clearCanvas }
 }

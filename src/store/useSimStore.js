@@ -1,5 +1,13 @@
-import { create } from 'zustand'
-import { registry } from '../core/plugin-api'
+import { create }       from 'zustand'
+import { registry }     from '../core/plugin-api'
+import { saveSession }  from '../core/persistence'
+
+// Debounce pour ne pas sauvegarder à chaque frappe de slider
+let saveTimer = null
+function debouncedSave(state) {
+  clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => saveSession(state), 800)
+}
 
 export const useSimStore = create((set, get) => ({
 
@@ -7,8 +15,6 @@ export const useSimStore = create((set, get) => ({
   connections: [],
   isRunning:   false,
   results:     {},
-
-  // ─── Composants ──────────────────────────────────────────────────
 
   addComponent: (typeDef, x, y) => {
     const def = registry.getComponentDef(typeDef.type)
@@ -27,37 +33,55 @@ export const useSimStore = create((set, get) => ({
       params:   { ...def.defaultParams, ...(typeDef.params || {}) },
     }
     registry.fireHook('componentAdd', comp)
-    set(s => ({ components: [...s.components, comp] }))
+    set(s => {
+      const next = { components: [...s.components, comp] }
+      debouncedSave({ ...s, ...next })
+      return next
+    })
   },
 
-  updateComponent: (id, patch) => set(s => ({
-    components: s.components.map(c =>
-      c.id === id ? { ...c, ...patch } : c
-    )
-  })),
+  updateComponent: (id, patch) => set(s => {
+    const next = {
+      components: s.components.map(c =>
+        c.id === id ? { ...c, ...patch } : c
+      )
+    }
+    debouncedSave({ ...s, ...next })
+    return next
+  }),
 
   updateParam: (id, key, value) => {
-    set(s => ({
-      components: s.components.map(c =>
-        c.id === id
-          ? { ...c, params: { ...c.params, [key]: value } }
-          : c
-      )
-    }))
+    set(s => {
+      const next = {
+        components: s.components.map(c =>
+          c.id === id
+            ? { ...c, params: { ...c.params, [key]: value } }
+            : c
+        )
+      }
+      debouncedSave({ ...s, ...next })
+      return next
+    })
     registry.fireHook('paramChange', { id, key, value })
   },
 
   removeComponent: (id) => {
     const comp = get().components.find(c => c.id === id)
     registry.fireHook('componentRemove', comp)
-    set(s => ({
-      components:  s.components.filter(c => c.id !== id),
-    }))
+    set(s => {
+      const next = {
+        components: s.components.filter(c => c.id !== id),
+      }
+      debouncedSave({ ...s, ...next })
+      return next
+    })
   },
 
-  setComponents: (comps) => set({ components: comps }),
-
-  // ─── Simulation ──────────────────────────────────────────────────
+  setComponents: (comps) => set(s => {
+    const next = { components: comps }
+    debouncedSave({ ...s, ...next })
+    return next
+  }),
 
   toggleSim: () => {
     const next = !get().isRunning

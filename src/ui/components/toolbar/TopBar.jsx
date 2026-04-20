@@ -93,13 +93,15 @@ export default function TopBar({ onOpenTemplates }) {
 // ─── Menu Fichier ─────────────────────────────────────────────────
 
 function FileMenu({ onNew, onOpen, onSave, onPDF, onClose }) {
-  const items = [
-    { label:'Nouveau projet',    kbd:'Ctrl+N', action: onNew  },
-    { label:'Ouvrir .lux…',      kbd:'Ctrl+O', action: onOpen },
-    { label:'Enregistrer…',      kbd:'Ctrl+S', action: onSave },
-    null,
-    { label:'Exporter PDF…',     kbd:'',       action: onPDF  },
-  ]
+const items = [
+  { label:'Nouveau projet',    kbd:'Ctrl+N', action: onNew  },
+  { label:'Ouvrir .lux…',      kbd:'Ctrl+O', action: onOpen },
+  { label:'Enregistrer…',      kbd:'Ctrl+S', action: onSave },
+  null,
+  { label:'Exporter PDF…',     kbd:'',       action: onPDF  },
+  null,
+  { label:'Effacer le canvas', kbd:'',       action: onClear, danger: true },
+]
 
   return (
     <>
