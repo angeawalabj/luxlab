@@ -26,10 +26,6 @@ dist-ssr
 
 # Rust
 /luxlab-engine/target/
-/public/wasm/
-# Rust
-luxlab-engine/target/
-src/wasm/
 
 # Node
 node_modules/
