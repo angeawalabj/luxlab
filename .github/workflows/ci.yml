@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build & Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Check build output
+        run: |
+          echo "=== Fichiers générés ==="
+          ls -la dist/
+          echo "=== Taille totale ==="
+          du -sh dist/
+
+  rust-check:
+    name: Check Rust Engine
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            luxlab-engine/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('luxlab-engine/Cargo.lock') }}
+
+      - name: Check Rust compilation
+        run: |
+          cd luxlab-engine
+          cargo check --target wasm32-unknown-unknown

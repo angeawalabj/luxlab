@@ -240,47 +240,51 @@ plugin.addEngine({
     return runGeoJS(components, options)
   },
 
-  renderResult: (ctx2d, result) => {
-    if (!result?.rays) return
-    for (const ray of result.rays) {
-      const color = wavelengthToCSS(ray.wl)
-      ctx2d.strokeStyle = color
-      ctx2d.lineWidth   = 1.3
-      ctx2d.globalAlpha = 0.82
-      ctx2d.shadowColor = color
-      ctx2d.shadowBlur  = 4
-      ctx2d.beginPath()
-      ray.segments.forEach((pt, i) =>
-        i === 0 ? ctx2d.moveTo(pt.x, pt.y) : ctx2d.lineTo(pt.x, pt.y)
-      )
-      ctx2d.stroke()
-    }
-    ctx2d.shadowBlur  = 0
-    ctx2d.globalAlpha = 1
+ renderResult: (ctx2d, result) => {
+  if (!result?.rays) return
+  for (const ray of result.rays) {
+    const color     = wavelengthToCSS(ray.wl)
+    const intensity = ray.intensity ?? 1.0
+    ctx2d.strokeStyle = color
+    ctx2d.lineWidth   = 1.3
+    ctx2d.globalAlpha = Math.min(0.9, 0.3 + intensity * 0.6)  // ← intensité
+    ctx2d.shadowColor = color
+    ctx2d.shadowBlur  = 4
+    ctx2d.beginPath()
+    ray.segments.forEach((pt, i) =>
+      i === 0 ? ctx2d.moveTo(pt.x, pt.y) : ctx2d.lineTo(pt.x, pt.y)
+    )
+    ctx2d.stroke()
+  }
+  ctx2d.shadowBlur  = 0
+  ctx2d.globalAlpha = 1
 
-    const colors = {
-      refraction:'#2980b9', reflection:'#e67e22',
-      dispersion:'#8e44ad', detection:'#27ae60', blocked:'#e74c3c',
-    }
-    for (const pt of (result.intersections || [])) {
-      ctx2d.beginPath()
-      ctx2d.arc(pt.x, pt.y, 3, 0, Math.PI * 2)
-      ctx2d.fillStyle = colors[pt.type] || '#7f8c8d'
-      ctx2d.fill()
-    }
-    for (const img of (result.images || [])) {
-      ctx2d.beginPath()
-      ctx2d.arc(img.x, img.y, 5, 0, Math.PI * 2)
-      ctx2d.strokeStyle = img.real ? '#27ae60' : '#f39c12'
-      ctx2d.lineWidth   = 1.5
-      ctx2d.setLineDash(img.real ? [] : [4, 3])
-      ctx2d.stroke()
-      ctx2d.setLineDash([])
-      ctx2d.fillStyle = '#7f8c8d'
-      ctx2d.font      = '9px Courier New'
-      ctx2d.fillText(`m=${img.magnification.toFixed(2)}`, img.x + 8, img.y - 5)
-    }
-  },
+  const colors = {
+    refraction:'#2980b9', reflection:'#e67e22',
+    dispersion:'#8e44ad', detection:'#27ae60', blocked:'#e74c3c',
+  }
+  for (const pt of (result.intersections || [])) {
+    ctx2d.beginPath()
+    ctx2d.arc(pt.x, pt.y, 3, 0, Math.PI * 2)
+    ctx2d.fillStyle = colors[pt.type] || '#7f8c8d'
+    ctx2d.fill()
+  }
+  for (const img of (result.images || [])) {
+    ctx2d.beginPath()
+    ctx2d.arc(img.x, img.y, 5, 0, Math.PI * 2)
+    ctx2d.strokeStyle = img.real ? '#27ae60' : '#f39c12'
+    ctx2d.lineWidth   = 1.5
+    ctx2d.setLineDash(img.real ? [] : [4, 3])
+    ctx2d.stroke()
+    ctx2d.setLineDash([])
+    ctx2d.fillStyle = '#7f8c8d'
+    ctx2d.font      = '9px Courier New'
+    ctx2d.fillText(
+      `m=${img.magnification.toFixed(2)}`,
+      img.x + 8, img.y - 5
+    )
+  }
+},
 })
 // ─── Panneau résultats ────────────────────────────────────────────
 
@@ -451,17 +455,27 @@ plugin.onLoad(() => {
 // ─── Moteur JS pur (fallback avant WASM) ─────────────────────────
 
 function runGeoJS(components, options = {}) {
-  const result  = { rays:[], intersections:[], images:[] }
+  const result  = { rays:[], intersections:[], images:[], durationMs:0 }
+  const t0      = performance.now()
   const source  = components.find(c => c.type === 'source')
   if (!source) return result
 
-  const wl       = source.params?.wavelength || 550
-  const numRays  = options.numRays  || 7
-  const maxX     = options.rayLength || 1200
-  const spread   = 60
+  const wl        = source.params?.wavelength  || 550
+  const intensity = source.params?.intensity   || 1.0
+  const coherence = source.params?.coherence   || 'high'
+
+  // La cohérence affecte le nombre de rayons et leur divergence
+  const coherenceSpread = { high:0, medium:8, low:20 }
+  const extraSpread     = coherenceSpread[coherence] || 0
+
+  const numRays   = options.numRays  || 7
+  const maxX      = options.rayLength || 1200
+  const spread    = 60 + extraSpread
 
   const obstacles = components
-    .filter(c => ['lens','mirror','prism','screen','blocker'].includes(c.type))
+    .filter(c =>
+      ['lens','mirror','prism','screen','blocker'].includes(c.type)
+    )
     .sort((a, b) => a.x - b.x)
     .filter(c => c.x > source.x)
 
@@ -470,9 +484,14 @@ function runGeoJS(components, options = {}) {
       ? (i - Math.floor(numRays / 2)) * (spread / (numRays - 1))
       : 0
 
+    // La cohérence basse ajoute une légère déviation aléatoire (déterministe)
+    const angleNoise = extraSpread > 0
+      ? ((i * 7919) % 100 - 50) / 1000 * (extraSpread / 10)
+      : 0
+
     let x     = source.x + 25
     let y     = source.y + offset
-    let angle = 0
+    let angle = angleNoise
     let alive = true
     const segments = [{ x, y }]
 
@@ -485,9 +504,7 @@ function runGeoJS(components, options = {}) {
 
       if (obs.type === 'lens') {
         const f = obs.params?.focalLength || 50
-        if (Math.abs(f) > 1e-10) {
-          angle -= (y - obs.y) / f
-        }
+        if (Math.abs(f) > 1e-10) angle -= (y - obs.y) / f
         result.intersections.push({ x, y, type:'refraction' })
       }
       if (obs.type === 'mirror') {
@@ -496,8 +513,9 @@ function runGeoJS(components, options = {}) {
         result.intersections.push({ x, y, type:'reflection' })
       }
       if (obs.type === 'prism') {
-        const n    = obs.params?.refractiveIndex || 1.52
+        const mat  = obs.params?.material || 'BK7'
         const apex = (obs.params?.apexAngle || 60) * Math.PI / 180
+        const n    = refractiveIndex(mat, wl)
         const dn   = 0.008 * (550 - wl) / 100
         angle += (n + dn - 1) * apex
         result.intersections.push({ x, y, type:'dispersion' })
@@ -522,14 +540,14 @@ function runGeoJS(components, options = {}) {
       })
     }
 
-    result.rays.push({ segments, wl })
+    // L'intensité affecte l'opacité des rayons
+    result.rays.push({ segments, wl, intensity })
   }
 
   // Images conjuguées
   const lenses = obstacles.filter(c => c.type === 'lens')
   if (lenses.length > 0) {
-    let xObj = source.x
-    let yObj = source.y
+    let xObj = source.x, yObj = source.y
     for (const lens of lenses) {
       const f = lens.params?.focalLength || 50
       const d = lens.x - xObj
@@ -548,8 +566,22 @@ function runGeoJS(components, options = {}) {
     }
   }
 
-  result.durationMs = 0
+  result.durationMs = performance.now() - t0
   return result
+}
+
+// Indice de réfraction Cauchy
+function refractiveIndex(material, wl_nm) {
+  const wl = wl_nm / 1000
+  const params = {
+    'BK7':          [1.5168, 0.00420],
+    'Fused Silica': [1.4580, 0.00354],
+    'Sapphire':     [1.7550, 0.01080],
+    'ZnSe':         [2.4360, 0.09000],
+    'CaF2':         [1.4260, 0.00270],
+  }
+  const [a, b] = params[material] || [1.5, 0.004]
+  return a + b / (wl * wl)
 }
 export default plugin
 

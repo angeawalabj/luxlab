@@ -69,21 +69,39 @@ export default function SimCanvas() {
 useEffect(() => {
   if (!isRunning || components.length === 0) return
 
-  const engine = registry.getEngineFor(components)
-  if (!engine) {
-    console.warn('[Canvas] Aucun moteur trouvé pour', components.map(c=>c.type))
+  // Trouver tous les moteurs capables de gérer les composants
+  const engines = registry.getAllEngines().filter(e => {
+    try { return e.canHandle(components) }
+    catch { return false }
+  })
+
+  if (engines.length === 0) {
+    console.warn('[Canvas] Aucun moteur trouvé')
     return
   }
 
-  const opts   = buildOptions(fidelity)
+  const opts = buildOptions(fidelity)
 
-  // run() peut être sync ou async
   const run = async () => {
     try {
-      const result = await Promise.resolve(engine.run(components, opts))
-      setResults(result)
+      // Fusionner les résultats de tous les moteurs actifs
+      let merged = { rays:[], intersections:[], images:[], waveResults:{} }
+
+      for (const engine of engines) {
+        const result = await Promise.resolve(engine.run(components, opts))
+        merged.rays          = [...merged.rays,         ...(result.rays         || [])]
+        merged.intersections = [...merged.intersections,...(result.intersections || [])]
+        merged.images        = [...merged.images,       ...(result.images        || [])]
+        if (result.waveResults) {
+          merged.waveResults = { ...merged.waveResults, ...result.waveResults }
+        }
+        merged.durationMs = result.durationMs
+      }
+
+      setResults(merged)
     } catch (err) {
-      console.warn('[Canvas] Erreur moteur :', err.message)
+      if (err.message !== 'cancelled')
+        console.warn('[Canvas] Erreur moteur :', err.message)
     }
   }
 
