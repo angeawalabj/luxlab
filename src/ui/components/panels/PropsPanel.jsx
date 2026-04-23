@@ -57,7 +57,7 @@ export default function PropsPanel() {
       {/* Paramètres */}
       <div style={{ flex:1, overflowY:'auto' }}>
         <Section title="PARAMÈTRES">
-          {(def.paramsDef || []).map(pDef => (
+          {getVisibleParams(def, comp).map(pDef => (
             <ParamField
               key={pDef.key}
               pDef={pDef}
@@ -112,6 +112,36 @@ export default function PropsPanel() {
   )
 }
 
+// filtrer selon sourceType si c'est une source
+
+function getVisibleParams(def, comp) {
+  if (comp.type !== 'source') return def.paramsDef || []
+
+  const sourceType = comp.params?.sourceType || 'parallel'
+
+  // Paramètres toujours visibles
+  const always = ['sourceType', 'wavelength', 'intensity',
+                  'coherence', 'polarization']
+
+  // Paramètres selon le type
+  const byType = {
+    parallel:      ['beamDiameter'],
+    point:         [],
+    conical:       ['coneAngle', 'beamDiameter'],
+    extended:      ['sourceHeight'],
+    gaussian:      ['waist', 'divergence'],
+    fiber_output:  ['numericalAperture'],
+    polychromatic: ['beamDiameter'],
+    led:           ['ledBandwidth', 'beamDiameter'],
+    spectral_lamp: ['lampElement'],
+    blackbody:     ['temperature', 'beamDiameter'],
+  }
+
+  const extra   = byType[sourceType] || []
+  const visible = new Set([...always, ...extra])
+
+  return (def.paramsDef || []).filter(p => visible.has(p.key))
+}
 // ─── Champ de paramètre ───────────────────────────────────────────
 
 function ParamField({ pDef, value, onChange }) {

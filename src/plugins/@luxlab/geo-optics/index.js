@@ -10,7 +10,21 @@ const plugin = new LuxPlugin({
   description:  'Tracé de rayons, lentilles, miroirs, prismes. Loi de Snell-Descartes.',
   dependencies: [],
 })
-
+function sourceIcon(sourceType) {
+  const icons = {
+    parallel:      '✦',
+    point:         '✸',
+    conical:       '▷',
+    extended:      '▬',
+    gaussian:      '⊙',
+    fiber_output:  '〜',
+    polychromatic: '✺',
+    led:           '◉',
+    spectral_lamp: '⚡',
+    blackbody:     '☀',
+  }
+  return icons[sourceType] || '✦'
+}
 // ─── Composants ──────────────────────────────────────────────────
 
 plugin.addComponent({
@@ -20,45 +34,112 @@ plugin.addComponent({
   moduleId: '@luxlab/geo-optics',
   category: 'Sources',
   defaultParams: {
-    wavelength:   550,
-    intensity:    1.0,
-    coherence:    'high',
-    polarization: 'none',
+    wavelength:       550,
+    intensity:        1.0,
+    sourceType:       'parallel',
+    coherence:        'high',
+    polarization:     'none',
+    beamDiameter:     60,
+    // Paramètres selon sourceType
+    coneAngle:        10,
+    sourceHeight:     40,
+    waist:            20,
+    divergence:       0.5,
+    numericalAperture:0.12,
+    ledBandwidth:     30,
+    lampElement:      'sodium',
+    temperature:      3000,
   },
   paramsDef: [
     {
-      key: 'wavelength', label: "Longueur d'onde (nm)",
-      type: 'range', min: 380, max: 780, step: 1,
+      key:'sourceType', label:'Type de source',
+      type:'select',
+      options:[
+        'parallel',
+        'point',
+        'conical',
+        'extended',
+        'gaussian',
+        'fiber_output',
+        'polychromatic',
+        'led',
+        'spectral_lamp',
+        'blackbody',
+      ],
     },
     {
-      key: 'intensity', label: 'Intensité (W/m²)',
-      type: 'range', min: 0, max: 10, step: 0.1,
+      key:'wavelength', label:'Longueur d\'onde (nm)',
+      type:'range', min:380, max:780, step:1,
     },
     {
-      key: 'coherence', label: 'Cohérence',
-      type: 'select', options: ['high', 'medium', 'low'],
+      key:'intensity', label:'Intensité (W/m²)',
+      type:'range', min:0, max:10, step:0.1,
     },
     {
-      key: 'polarization', label: 'Polarisation',
-      type: 'select', options: ['none', 'linear', 'circular'],
+      key:'coherence', label:'Cohérence',
+      type:'select', options:['high','medium','low'],
     },
-    // Dans addComponent source, ajoute dans paramsDef :
-{
-  key:'sourceType', label:'Type de source',
-  type:'select',
-  options:['monochromatique','polychromatique','laser'],
-},
+    {
+      key:'polarization', label:'Polarisation',
+      type:'select', options:['none','linear','circular','elliptical'],
+    },
+    {
+      key:'beamDiameter', label:'Diamètre faisceau (px)',
+      type:'range', min:5, max:200, step:5,
+    },
+    // Params source étendue
+    {
+      key:'sourceHeight', label:'Hauteur source étendue (px)',
+      type:'range', min:5, max:200, step:5,
+    },
+    // Params laser gaussien
+    {
+      key:'waist', label:'Waist w₀ (px)',
+      type:'range', min:2, max:100, step:1,
+    },
+    {
+      key:'divergence', label:'Divergence (°)',
+      type:'range', min:0, max:20, step:0.1,
+    },
+    // Params fibre
+    {
+      key:'numericalAperture', label:'Ouverture numérique',
+      type:'range', min:0.05, max:0.9, step:0.01,
+    },
+    // Params LED
+    {
+      key:'ledBandwidth', label:'Largeur bande LED (nm)',
+      type:'range', min:5, max:100, step:5,
+    },
+    // Params lampe spectrale
+    {
+      key:'lampElement', label:'Élément (lampe spectrale)',
+      type:'select',
+      options:['sodium','mercury','helium','hydrogen','neon'],
+    },
+    // Params corps noir
+    {
+      key:'temperature', label:'Température (K)',
+      type:'range', min:1000, max:10000, step:100,
+    },
+    // Params cône
+    {
+      key:'coneAngle', label:'Angle du cône (°)',
+      type:'range', min:1, max:60, step:1,
+    },
   ],
   simulate: (params, ctx) => ({
-    type:   'ray-source',
-    origin: ctx?.position,
-    wl:     params.wavelength,
-    I:      params.intensity,
+    type:       'ray-source',
+    origin:     ctx?.position,
+    wl:         params.wavelength,
+    I:          params.intensity,
+    sourceType: params.sourceType,
   }),
-  render: () => ({
-    shape: 'rect',
-    icon:  '✦',
-    color: '#e67e22',
+  render: (props) => ({
+    shape:      'source',
+    icon:       sourceIcon(props?.params?.sourceType),
+    color:      '#e67e22',
+    sourceType: props?.params?.sourceType,
   }),
 })
 
@@ -272,17 +353,23 @@ plugin.addComponent({
 // ─── Moteur physique ──────────────────────────────────────────────
 plugin.addEngine({
   id:   '@luxlab/geo-optics/engine',
-  name: 'Ray Tracer Géométrique',
+  name: 'Ray Tracer Géométrique (WASM)',
 
   canHandle: (components) =>
     components.some(c =>
-      ['source','lens','mirror','prism','screen','blocker'].includes(c.type)
+      ['source','lens','mirror','prism','screen','blocker','filter'].includes(c.type)
     ),
 
-  // Import direct — pas d'import dynamique dans engine.run
-  run: (components, options) => {
-    // Le moteur JS pur en fallback pendant le dev
-    // Le WASM sera branché ici à l'étape suivante
+  run: async (components, options) => {
+    // Essayer le WASM d'abord, fallback JS si non disponible
+    try {
+      const { bridge } = await import('../../../core/SimulationBridge.js')
+      if (bridge.isReady) {
+        return await bridge.runSimulation(components, options)
+      }
+    } catch {
+      // WASM non disponible, fallback JS
+    }
     return runGeoJS(components, options)
   },
 
