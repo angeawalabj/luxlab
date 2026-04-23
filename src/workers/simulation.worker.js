@@ -1,5 +1,11 @@
 import init, {
   run_simulation,
+  compute_young,
+  compute_grating,
+  compute_decay,
+  compute_attenuation,
+  compute_compton,
+  compute_dose,
   wavelength_to_color,
   photon_energy_ev,
   engine_version,
@@ -91,6 +97,41 @@ case 'RUN': {
       break
     }
 
+case 'YOUNG': {
+  const result = JSON.parse(compute_young(JSON.stringify(data.params)))
+  self.postMessage({ type:'YOUNG_RESULT', id:data.id, result })
+  break
+}
+
+case 'GRATING': {
+  const result = JSON.parse(compute_grating(JSON.stringify(data.params)))
+  self.postMessage({ type:'GRATING_RESULT', id:data.id, result })
+  break
+}
+
+case 'DECAY': {
+  const result = JSON.parse(compute_decay(JSON.stringify(data.params)))
+  self.postMessage({ type:'DECAY_RESULT', id:data.id, result })
+  break
+}
+
+case 'ATTENUATION': {
+  const result = JSON.parse(compute_attenuation(JSON.stringify(data.params)))
+  self.postMessage({ type:'ATTENUATION_RESULT', id:data.id, result })
+  break
+}
+
+case 'COMPTON': {
+  const result = JSON.parse(compute_compton(data.energy_kev, data.steps || 180))
+  self.postMessage({ type:'COMPTON_RESULT', id:data.id, result })
+  break
+}
+
+case 'DOSE': {
+  const result = JSON.parse(compute_dose(JSON.stringify(data.params)))
+  self.postMessage({ type:'DOSE_RESULT', id:data.id, result })
+  break
+}
     default:
       self.postMessage({
         type:  'ERROR',

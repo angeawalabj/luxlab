@@ -138,47 +138,58 @@ plugin.addEngine({
   canHandle: (components) =>
     components.some(c => ['slit2','grating','polarizer','beamsplitter'].includes(c.type)),
 
-  run: (components, options) => {
-    const source   = components.find(c => c.type === 'source')
-    const slit     = components.find(c => c.type === 'slit2')
-    const grating  = components.find(c => c.type === 'grating')
-    const result   = { rays:[], intersections:[], images:[], waveResults:{} }
+run: async (components, options) => {
+  const source  = components.find(c => c.type === 'source')
+  const slit    = components.find(c => c.type === 'slit2')
+  const grating = components.find(c => c.type === 'grating')
+  const result  = { rays:[], intersections:[], images:[],
+                    waveResults:{}, durationMs:0 }
+  if (!source) return result
 
-    if (!source) return result
+  const wl = source.params?.wavelength || 550
 
-    const wl = source.params?.wavelength || 550
+  try {
+    const { bridge } = await import('../../../core/SimulationBridge.js')
 
-    // Profil Young
-    if (slit) {
-      result.waveResults.youngProfile = computeYoung({
-        wl,
-        d:  slit.params?.separation     || 0.5,
-        a:  slit.params?.slitWidth      || 0.1,
-        D:  slit.params?.screenDistance || 300,
+    if (bridge.isReady && slit) {
+      // Young via WASM Rust
+      const youngResult = await bridge.computeYoung({
+        wavelength:      wl,
+        slit_separation: slit.params?.separation     || 0.5,
+        slit_width:      slit.params?.slitWidth      || 0.1,
+        screen_distance: slit.params?.screenDistance || 300,
+        half_height:     10,
+        steps:           400,
       })
-      result.waveResults.interfrange =
-        (wl * 1e-6 * (slit.params?.screenDistance || 300)) /
-        (slit.params?.separation || 0.5)
+      result.waveResults.youngProfile  = youngResult.profile
+                                          .map(p => ({ y:p.y, I:p.i }))
+      result.waveResults.interfrange   = youngResult.interfrange
     }
 
-    // Maxima réseau
-    if (grating) {
-      result.waveResults.gratingMaxima = computeGratingMaxima(
-        wl,
-        1e6 / (grating.params?.spacing || 600),
-        grating.params?.maxOrder || 3
-      )
+    if (bridge.isReady && grating) {
+      // Réseau via WASM Rust
+      const gratingResult = await bridge.computeGrating({
+        wavelength:  wl,
+        spacing_nm:  1e6 / (grating.params?.spacing || 600),
+        max_order:   grating.params?.maxOrder || 3,
+      })
+      result.waveResults.gratingMaxima = gratingResult
+                                          .map(m => ({ order:m.order, angle:m.angle }))
     }
 
-    // Loi de Malus (polariseurs)
-    const polarizers = components.filter(c => c.type === 'polarizer')
-    if (polarizers.length >= 2) {
-      const theta = (polarizers[1].params?.angle - polarizers[0].params?.angle) * Math.PI / 180
-      result.waveResults.malusTransmittance = Math.pow(Math.cos(theta), 2)
+  } catch {
+    // Fallback JS si WASM non disponible
+    if (slit) {
+      result.waveResults.youngProfile = computeYoungJS({
+        wl, d:slit.params?.separation||0.5,
+        a:slit.params?.slitWidth||0.1,
+        D:slit.params?.screenDistance||300,
+      })
     }
+  }
 
-    return result
-  },
+  return result
+},
 
 renderResult: (ctx2d, result) => {
   if (!result?.waveResults?.youngProfile) return

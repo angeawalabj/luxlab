@@ -107,7 +107,67 @@ class SimulationBridge {
       this.#worker.postMessage({ type: 'WAVELENGTH_COLOR', id, wl })
     })
   }
+// Ajouter ces méthodes dans la classe SimulationBridge :
 
+async computeYoung(params) {
+  const id = this.#nextId('young')
+  return new Promise((resolve, reject) => {
+    this.#pending.set(id, {
+      resolve: (d) => resolve(d.result), reject
+    })
+    this.#worker.postMessage({ type:'YOUNG', id, params })
+  })
+}
+
+async computeGrating(params) {
+  const id = this.#nextId('grat')
+  return new Promise((resolve, reject) => {
+    this.#pending.set(id, {
+      resolve: (d) => resolve(d.result), reject
+    })
+    this.#worker.postMessage({ type:'GRATING', id, params })
+  })
+}
+
+async computeDecay(params) {
+  const id = this.#nextId('decay')
+  return new Promise((resolve, reject) => {
+    this.#pending.set(id, {
+      resolve: (d) => resolve(d.result), reject
+    })
+    this.#worker.postMessage({ type:'DECAY', id, params })
+  })
+}
+
+async computeAttenuation(params) {
+  const id = this.#nextId('att')
+  return new Promise((resolve, reject) => {
+    this.#pending.set(id, {
+      resolve: (d) => resolve(d.result), reject
+    })
+    this.#worker.postMessage({ type:'ATTENUATION', id, params })
+  })
+}
+
+async computeCompton(energy_kev, steps = 180) {
+  const id = this.#nextId('compton')
+  return new Promise((resolve, reject) => {
+    this.#pending.set(id, {
+      resolve: (d) => resolve(d.result), reject
+    })
+    this.#worker.postMessage({ type:'COMPTON', id, energy_kev, steps })
+  })
+}
+
+async computeDose(params) {
+  const id = this.#nextId('dose')
+  return new Promise((resolve, reject) => {
+    this.#pending.set(id, {
+      resolve: (d) => resolve(d.result), reject
+    })
+    this.#worker.postMessage({ type:'DOSE', id, params })
+  })
+}
   /**
    * Vérifie que le Worker est prêt.
    */
