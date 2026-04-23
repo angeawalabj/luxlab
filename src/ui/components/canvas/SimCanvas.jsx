@@ -3,6 +3,7 @@ import { useSimStore }  from '../../../store/useSimStore'
 import { useAppStore }  from '../../../store/useAppStore'
 import { registry }     from '../../../core/plugin-api'
 import { bridge }       from '../../../core/SimulationBridge'
+import { wavelengthToCSSFast } from '../../../core/colorScience'
 
 const MODULE_COLORS = {
   '@luxlab/geo-optics':   'var(--lb-geo)',
@@ -335,7 +336,7 @@ function CompNode({ comp, def, selected, onMouseDown }) {
         <text
           x={0} y={46}
           textAnchor="middle" fontSize={8}
-          fill={wlToCSS(comp.params.wavelength)}
+          fill={wavelengthToCSSFast(comp.params.wavelength)}
           style={{ pointerEvents:'none', fontFamily:'var(--font-mono)' }}
         >
           λ={comp.params.wavelength}nm
@@ -513,13 +514,4 @@ function buildOptions(fidelity) {
     max:      { numRays:31, rayLength:1200, aberrations:true  },
   }
   return p[fidelity] || p.standard
-}
-
-function wlToCSS(wl) {
-  if (wl < 440) return '#8e44ad'
-  if (wl < 490) return '#2980b9'
-  if (wl < 510) return '#16a085'
-  if (wl < 580) return '#27ae60'
-  if (wl < 645) return '#f39c12'
-  return '#e74c3c'
 }

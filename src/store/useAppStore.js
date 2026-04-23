@@ -56,4 +56,17 @@ export const useAppStore = create((set, get) => ({
 
   collabOpen:   false,
   toggleCollab: () => set(s => ({ collabOpen: !s.collabOpen })),
+
+  // Paramètres de rendu (désactivables)
+renderSettings: {
+  hdr:          false,   // HDR + bloom (coûteux)
+  bloom:        false,
+  bloomStrength: 0.6,
+  cie:          true,    // Conversion CIE (recommandé)
+  glow:         true,    // Glow simple sur les rayons
+  glowBlur:     4,
+},
+setRenderSettings: (patch) => set(s => ({
+  renderSettings: { ...s.renderSettings, ...patch }
+})),
 }))

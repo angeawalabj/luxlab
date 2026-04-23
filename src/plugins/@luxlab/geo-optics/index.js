@@ -1,5 +1,6 @@
 import { LuxPlugin } from '../../../core/plugin-api/index.js'
 import GeoResultsPanel from './GeoResultsPanel.jsx'
+import { wavelengthToCSS } from '../../../core/colorScience'
 
 const plugin = new LuxPlugin({
   id:           '@luxlab/geo-optics',
@@ -323,7 +324,7 @@ plugin.addComponent({
   }),
   render: (props) => ({
     shape: 'filter',
-    color: wlToCSS(props?.params?.centerWL || 550),
+    color: wavelengthToCSS(props?.params?.centerWL || 550),
   }),
 })
 plugin.addComponent({

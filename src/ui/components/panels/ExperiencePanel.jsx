@@ -7,7 +7,9 @@ export default function ExperiencePanel({ experience, onClose }) {
   const [feedback,  setFeedback]  = useState(null)
   const [answer,    setAnswer]    = useState('')
   const [showFinal, setShowFinal] = useState(false)
-
+  const [pos,      setPos]      = useState({ x: window.innerWidth - 310, y: 60 })
+  const [dragging, setDragging] = useState(false)
+  const [dragStart,setDragStart]= useState({ mx:0, my:0, px:0, py:0 })
   const { components, isRunning } = useSimStore()
 
   const step  = experience.steps[stepIdx]
@@ -15,24 +17,28 @@ export default function ExperiencePanel({ experience, onClose }) {
   const pct   = Math.round((completed.length / total) * 100)
 
   // Auto-validation en temps réel
-  useEffect(() => {
-    if (!step || completed.includes(step.id)) return
-    if (validateStep(step, components, isRunning)) {
-      setCompleted(c => [...new Set([...c, step.id])])
-      setFeedback({ ok:true, msg: step.onSuccess })
-      setTimeout(() => {
-        setFeedback(null)
-        if (stepIdx < total - 1) setStepIdx(i => i + 1)
-        else setShowFinal(true)
-      }, 1500)
-    }
-  }, [components, isRunning])
+useEffect(() => {
+  const move = (e) => {
+    if (!dragging) return
+    setPos({
+      x: Math.max(0, dragStart.px + e.clientX - dragStart.mx),
+      y: Math.max(0, dragStart.py + e.clientY - dragStart.my),
+    })
+  }
+  const up = () => setDragging(false)
+  document.addEventListener('mousemove', move)
+  document.addEventListener('mouseup',   up)
+  return () => {
+    document.removeEventListener('mousemove', move)
+    document.removeEventListener('mouseup',   up)
+  }
+}, [dragging, dragStart])
 
   return (
     <div style={{
-      position:      'absolute',
-      top:           60,
-      right:         12,
+      position: 'fixed',       // fixed au lieu de absolute
+      left:     pos.x,
+      top:      pos.y,
       width:         290,
       maxHeight:     'calc(100vh - 80px)',
       background:    'var(--lb-surface)',
@@ -46,11 +52,17 @@ export default function ExperiencePanel({ experience, onClose }) {
 
       {/* Header */}
       <div style={{
+        cursor: dragging ?'grabbing' : 'grab',
         padding:      '10px 14px',
         borderBottom: '1px solid var(--lb-border)',
         display:      'flex',
         alignItems:   'center',
         gap:          8,
+      }}
+      onMouseDown={(e) => {
+        setDragging(true)
+        setDragStart({ mx:e.clientX, my:e.clientY, px:pos.x, py:pos.y })
+        e.preventDefault()
       }}>
         <div style={{ flex:1 }}>
           <div style={{ fontSize:11, fontWeight:600, color:'var(--lb-text)' }}>

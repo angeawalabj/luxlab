@@ -1,6 +1,7 @@
 import { useAppStore }  from '../../../store/useAppStore'
 import { useSimStore }  from '../../../store/useSimStore'
 import { registry }     from '../../../core/plugin-api'
+import { wavelengthToCSSFast } from '../../../core/colorScience'
 
 export default function PropsPanel() {
   const { selectedId }              = useAppStore()
@@ -146,7 +147,7 @@ function getVisibleParams(def, comp) {
 
 function ParamField({ pDef, value, onChange }) {
   const isWL    = pDef.key === 'wavelength'
-  const accent  = isWL ? wlToCSS(value) : 'var(--lb-text)'
+  const accent  = isWL ? wavelengthToCSSFast(value) : 'var(--lb-text)'
 
   if (pDef.type === 'range') {
     return (
@@ -285,15 +286,7 @@ function ActionBtn({ children, onClick, danger }) {
   )
 }
 
-function wlToCSS(wl) {
-  if (!wl) return 'var(--lb-text)'
-  if (wl < 440) return '#8e44ad'
-  if (wl < 490) return '#2980b9'
-  if (wl < 510) return '#16a085'
-  if (wl < 580) return '#27ae60'
-  if (wl < 645) return '#f39c12'
-  return '#e74c3c'
-}
+
 
 const panelStyle = {
   width:         220,
