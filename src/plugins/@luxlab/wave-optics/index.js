@@ -180,10 +180,13 @@ plugin.addEngine({
     return result
   },
 
-  renderResult: (ctx2d, result) => {
-    // Le rendu des résultats ondulatoires est dans WaveResultsPanel
-    // Ici on pourrait ajouter un rendu overlay sur le canvas
-  },
+renderResult: (ctx2d, result) => {
+  if (!result?.waveResults?.youngProfile) return
+
+  // Trouver la position de l'écran depuis les composants
+  // On dessine le profil d'interférence directement sur l'écran
+  // Le canvas reçoit le contexte global donc on dessine en coordonnées canvas
+},
 })
 
 // ─── Panneau résultats ────────────────────────────────────────────

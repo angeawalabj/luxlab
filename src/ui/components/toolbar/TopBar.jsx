@@ -3,6 +3,8 @@ import { useAppStore }                  from '../../../store/useAppStore'
 import { useSimStore }                  from '../../../store/useSimStore'
 import { useFileActions }               from '../../../core/useFileActions'
 import SaveModal                        from '../modals/SaveModal'
+import PluginManager  from '../modals/PluginManager'
+import SettingsPanel  from '../modals/SettingsPanel'
 
 const FIDELITY = [
   { id:'fast',     label:'Rapide'   },
@@ -17,6 +19,8 @@ export default function TopBar({ onOpenTemplates }) {
   const [showSave, setShowSave]   = useState(false)
   const [fileMenu, setFileMenu]   = useState(false)
   const fileMenuRef               = useRef(null)
+  const [showPlugins,  setShowPlugins]  = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
 
   // Fermer le menu si clic en dehors
   useEffect(() => {
@@ -89,6 +93,8 @@ export default function TopBar({ onOpenTemplates }) {
 
         <TbBtn onClick={onOpenTemplates}>Bibliothèque</TbBtn>
         <TbBtn onClick={toggleSidebar}>Sidebar</TbBtn>
+        <TbBtn onClick={() => setShowPlugins(true)}>Plugins</TbBtn>
+        <TbBtn onClick={() => setShowSettings(true)}>⚙</TbBtn>
 
         {/* Fidélité */}
         <div style={{
@@ -143,6 +149,8 @@ export default function TopBar({ onOpenTemplates }) {
           onClose={() => setShowSave(false)}
         />
       )}
+      {showPlugins  && <PluginManager  onClose={() => setShowPlugins(false)}/>}
+      {showSettings && <SettingsPanel  onClose={() => setShowSettings(false)}/>}
     </>
   )
 }

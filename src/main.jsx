@@ -73,3 +73,12 @@ function Root() {
 }
 
 bootstrap()
+
+// En bas du fichier, après bootstrap()
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').then(() => {
+      console.log('[LuxLab] Service Worker enregistré — mode offline activé')
+    })
+  })
+}

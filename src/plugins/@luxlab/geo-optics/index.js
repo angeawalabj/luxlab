@@ -374,28 +374,46 @@ plugin.addEngine({
     return runGeoJS(components, options)
   },
 
- renderResult: (ctx2d, result) => {
+renderResult: (ctx2d, result, options) => {
   if (!result?.rays) return
+
+  const rs = options?.renderSettings || {
+    cie:true, glow:true, hdr:false
+  }
+
   for (const ray of result.rays) {
-    const color     = wavelengthToCSS(ray.wl)
+    const color = rs.cie
+      ? wavelengthToCSS(ray.wl)        // CIE XYZ (précis)
+      : wavelengthToCSSFast(ray.wl)    // Approximation (rapide)
+
     const intensity = ray.intensity ?? 1.0
+
     ctx2d.strokeStyle = color
     ctx2d.lineWidth   = 1.3
-    ctx2d.globalAlpha = Math.min(0.9, 0.3 + intensity * 0.6)  // ← intensité
-    ctx2d.shadowColor = color
-    ctx2d.shadowBlur  = 4
+    ctx2d.globalAlpha = Math.min(0.9, 0.3 + intensity * 0.6)
+
+    if (rs.glow) {
+      ctx2d.shadowColor = color
+      ctx2d.shadowBlur  = options?.renderSettings?.glowBlur ?? 4
+    }
+
     ctx2d.beginPath()
     ray.segments.forEach((pt, i) =>
       i === 0 ? ctx2d.moveTo(pt.x, pt.y) : ctx2d.lineTo(pt.x, pt.y)
     )
     ctx2d.stroke()
   }
+
   ctx2d.shadowBlur  = 0
   ctx2d.globalAlpha = 1
 
+  // Points d'intersection
   const colors = {
-    refraction:'#2980b9', reflection:'#e67e22',
-    dispersion:'#8e44ad', detection:'#27ae60', blocked:'#e74c3c',
+    refraction:'#2980b9',
+    reflection:'#e67e22',
+    dispersion:'#8e44ad',
+    detection: '#27ae60',
+    blocked:   '#e74c3c',
   }
   for (const pt of (result.intersections || [])) {
     ctx2d.beginPath()
@@ -403,6 +421,8 @@ plugin.addEngine({
     ctx2d.fillStyle = colors[pt.type] || '#7f8c8d'
     ctx2d.fill()
   }
+
+  // Images conjuguées
   for (const img of (result.images || [])) {
     ctx2d.beginPath()
     ctx2d.arc(img.x, img.y, 5, 0, Math.PI * 2)
@@ -754,14 +774,3 @@ function refractiveIndex(material, wl_nm) {
 }
 export default plugin
 
-// ─── Utilitaire couleur ───────────────────────────────────────────
-
-function wavelengthToCSS(wl) {
-  if (wl < 380) return 'hsl(280,80%,50%)'
-  if (wl < 440) return `hsl(${270 + (wl-380)*0.5},90%,55%)`
-  if (wl < 490) return `hsl(${240 + (wl-440)*0.9},90%,55%)`
-  if (wl < 510) return `hsl(${175 + (wl-490)*3.25},85%,45%)`
-  if (wl < 580) return `hsl(${120 - (wl-510)*1.7},85%,40%)`
-  if (wl < 645) return `hsl(${25  - (wl-580)*0.38},90%,45%)`
-  return `hsl(0,85%,${Math.max(28, 45-(wl-645)*0.12)}%)`
-}

@@ -4,6 +4,7 @@ import { useAppStore }  from '../../../store/useAppStore'
 import { registry }     from '../../../core/plugin-api'
 import { bridge }       from '../../../core/SimulationBridge'
 import { wavelengthToCSSFast } from '../../../core/colorScience'
+import { renderInterferenceOnScreen } from './interferenceRenderer'
 
 const MODULE_COLORS = {
   '@luxlab/geo-optics':   'var(--lb-geo)',
@@ -18,6 +19,7 @@ export default function SimCanvas() {
   const canvasRef    = useRef(null)
   const containerRef = useRef(null)
   const [size, setSize] = useState({ w:1200, h:800 })
+  const { renderSettings } = useAppStore()
 
   const {
     components, addComponent, updateComponent,
@@ -60,8 +62,21 @@ export default function SimCanvas() {
     ctx.scale(zoom, zoom)
 
     const engine = registry.getEngineFor(components)
-    if (engine?.renderResult) engine.renderResult(ctx, results)
-
+    if (engine?.renderResult) {
+      engine.renderResult(ctx, results, {
+        renderSettings,
+        zoom,
+      })
+    }
+    if (results?.waveResults?.youngProfile) {
+      ctx.restore()
+      ctx.save()
+      ctx.translate(pan.x, pan.y)
+      ctx.scale(zoom, zoom)
+      renderInterferenceOnScreen(
+        ctx, components, results, 1, { x:0, y:0 }
+      )
+    }
     ctx.restore()
   }, [results, isRunning, size, zoom, pan, components])
 
