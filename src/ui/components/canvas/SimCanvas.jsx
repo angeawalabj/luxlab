@@ -5,6 +5,7 @@ import { registry }     from '../../../core/plugin-api'
 import { bridge }       from '../../../core/SimulationBridge'
 import { wavelengthToCSSFast } from '../../../core/colorScience'
 import { renderInterferenceOnScreen } from './interferenceRenderer'
+import { useCollab }     from '../../../collaboration/useCollab'
 
 const MODULE_COLORS = {
   '@luxlab/geo-optics':   'var(--lb-geo)',
@@ -20,6 +21,7 @@ export default function SimCanvas() {
   const containerRef = useRef(null)
   const [size, setSize] = useState({ w:1200, h:800 })
   const { renderSettings } = useAppStore()
+  const { users, updateCursor, isConnected } = useCollab()
 
   const {
     components, addComponent, updateComponent,
@@ -387,6 +389,13 @@ function Grid({ zoom, pan }) {
       backgroundPosition: `${pan.x % size}px ${pan.y % size}px`,
       opacity:            0.7,
       pointerEvents:      'none',
+    }}
+    onMouseMove={(e) => {
+      handleMouseMove(e)
+      if (isConnected) {
+        const rect = containerRef.current?.getBoundingClientRect()
+        if (rect) updateCursor(e.clientX - rect.left, e.clientY - rect.top)
+      }
     }}/>
   )
 }
@@ -477,6 +486,32 @@ function LogoMarkHint() {
       <path d="M 65 77.5 L 22.5 77.5 L 22.5 35"
         fill="none" stroke="var(--lb-text)" strokeWidth="4" strokeLinecap="square"/>
       <rect x="65" y="65" width="25" height="25" fill="var(--lb-text)"/>
+      {users.map(u => u.cursor && (
+  <g key={u.clientId}
+    transform={`translate(${u.cursor.x},${u.cursor.y})`}
+    style={{ pointerEvents:'none' }}
+  >
+    <path
+      d="M0,0 L0,14 L4,10 L7,16 L9,15 L6.5,9 L11,9 Z"
+      fill={u.color || '#2c3e50'}
+      stroke="#fff"
+      strokeWidth={0.8}
+    />
+    <rect
+      x={12} y={0} width={u.name?.length * 5.5 + 8} height={14}
+      rx={3}
+      fill={u.color || '#2c3e50'}
+    />
+    <text
+      x={16} y={10}
+      fontSize={8} fill="#fff"
+      fontFamily="var(--font-ui)"
+      style={{ pointerEvents:'none' }}
+    >
+      {u.name}
+    </text>
+  </g>
+))}
     </svg>
   )
 }

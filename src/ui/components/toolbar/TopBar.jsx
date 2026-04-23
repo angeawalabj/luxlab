@@ -5,6 +5,7 @@ import { useFileActions }               from '../../../core/useFileActions'
 import SaveModal                        from '../modals/SaveModal'
 import PluginManager  from '../modals/PluginManager'
 import SettingsPanel  from '../modals/SettingsPanel'
+import CollabPanel from '../collab/CollabPanel'
 
 const FIDELITY = [
   { id:'fast',     label:'Rapide'   },
@@ -21,7 +22,7 @@ export default function TopBar({ onOpenTemplates }) {
   const fileMenuRef               = useRef(null)
   const [showPlugins,  setShowPlugins]  = useState(false)
   const [showSettings, setShowSettings] = useState(false)
-
+  const [showCollab, setShowCollab] = useState(false)
   // Fermer le menu si clic en dehors
   useEffect(() => {
     if (!fileMenu) return
@@ -95,6 +96,7 @@ export default function TopBar({ onOpenTemplates }) {
         <TbBtn onClick={toggleSidebar}>Sidebar</TbBtn>
         <TbBtn onClick={() => setShowPlugins(true)}>Plugins</TbBtn>
         <TbBtn onClick={() => setShowSettings(true)}>⚙</TbBtn>
+        <TbBtn onClick={() => setShowCollab(v => !v)}>⟳ Collab</TbBtn>
 
         {/* Fidélité */}
         <div style={{
@@ -151,6 +153,7 @@ export default function TopBar({ onOpenTemplates }) {
       )}
       {showPlugins  && <PluginManager  onClose={() => setShowPlugins(false)}/>}
       {showSettings && <SettingsPanel  onClose={() => setShowSettings(false)}/>}
+      {showCollab && <CollabPanel onClose={() => setShowCollab(false)}/>}
     </>
   )
 }

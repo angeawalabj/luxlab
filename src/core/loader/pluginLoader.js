@@ -8,6 +8,9 @@ import { registry } from '../plugin-api/index.js'
 const OFFICIAL_PLUGINS = [
   () => import('../../plugins/@luxlab/geo-optics/index.js'),
   () => import('../../plugins/@luxlab/wave-optics/index.js'),
+  () => import('../../plugins/@luxlab/quantum/index.js'),
+  () => import('../../plugins/@luxlab/nuclear/index.js'),
+  () => import('../../plugins/@luxlab/spectroscopy/index.js'),
 ]
 /**
  * Charge tous les plugins officiels activés.
