@@ -1,27 +1,28 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
-import { useSimStore }  from '../../../store/useSimStore'
-import { useAppStore }  from '../../../store/useAppStore'
-import { registry }     from '../../../core/plugin-api'
-import { bridge }       from '../../../core/SimulationBridge'
-import { wavelengthToCSSFast } from '../../../core/colorScience'
+import { useSimStore }     from '../../../store/useSimStore'
+import { useAppStore }     from '../../../store/useAppStore'
+import { registry }        from '../../../core/plugin-api'
+import { bridge }          from '../../../core/SimulationBridge'
+import { useCollab }       from '../../../collaboration/useCollab'
 import { renderInterferenceOnScreen } from './interferenceRenderer'
-import { useCollab }     from '../../../collaboration/useCollab'
 
 const MODULE_COLORS = {
-  '@luxlab/geo-optics':   'var(--lb-geo)',
-  '@luxlab/wave-optics':  'var(--lb-wave)',
-  '@luxlab/quantum':      'var(--lb-quant)',
-  '@luxlab/nuclear':      'var(--lb-nuc)',
-  '@luxlab/spectroscopy': 'var(--lb-spec)',
-  '@luxlab/em':           'var(--lb-em)',
+  '@luxlab/geo-optics':    '#e67e22',
+  '@luxlab/wave-optics':   '#2980b9',
+  '@luxlab/quantum':       '#8e44ad',
+  '@luxlab/nuclear':       '#e74c3c',
+  '@luxlab/spectroscopy':  '#16a085',
+  '@luxlab/em':            '#d35400',
+}
+
+function getModuleColor(moduleId) {
+  return MODULE_COLORS[moduleId] || '#7f8c8d'
 }
 
 export default function SimCanvas() {
   const canvasRef    = useRef(null)
   const containerRef = useRef(null)
   const [size, setSize] = useState({ w:1200, h:800 })
-  const { renderSettings } = useAppStore()
-  const { users, updateCursor, isConnected } = useCollab()
 
   const {
     components, addComponent, updateComponent,
@@ -31,13 +32,13 @@ export default function SimCanvas() {
   const {
     zoom, setZoom, pan, setPan,
     selectedId, setSelected,
-    fidelity,
+    fidelity, renderSettings,
   } = useAppStore()
 
-  const dragging = useRef(null)
+  const { users, updateCursor, isConnected } = useCollab()
+
+  const dragging   = useRef(null)
   const dragOffset = useRef({ x:0, y:0 })
-  const isPanning  = useRef(false)
-  const panStart   = useRef({ mx:0, my:0, px:0, py:0 })
 
   // ─── Resize observer ─────────────────────────────────────────────
   useEffect(() => {
@@ -49,83 +50,78 @@ export default function SimCanvas() {
     return () => obs.disconnect()
   }, [])
 
-  // ─── Rendu WASM → Canvas2D ───────────────────────────────────────
+  // ─── Rendu canvas 2D ─────────────────────────────────────────────
   useEffect(() => {
     const cvs = canvasRef.current
     if (!cvs) return
     cvs.width  = size.w
     cvs.height = size.h
     const ctx  = cvs.getContext('2d')
-    ctx.clearRect(0, 0, cvs.width, cvs.height)
-    if (!isRunning || !results?.rays) return
+    ctx.clearRect(0, 0, size.w, size.h)
+    if (!isRunning) return
 
     ctx.save()
     ctx.translate(pan.x, pan.y)
     ctx.scale(zoom, zoom)
 
-    const engine = registry.getEngineFor(components)
-    if (engine?.renderResult) {
-      engine.renderResult(ctx, results, {
-        renderSettings,
-        zoom,
-      })
-    }
-    if (results?.waveResults?.youngProfile) {
-      ctx.restore()
-      ctx.save()
-      ctx.translate(pan.x, pan.y)
-      ctx.scale(zoom, zoom)
-      renderInterferenceOnScreen(
-        ctx, components, results, 1, { x:0, y:0 }
-      )
-    }
-    ctx.restore()
-  }, [results, isRunning, size, zoom, pan, components])
+    const engines = registry.getAllEngines().filter(e => {
+      try { return e.canHandle(components) } catch { return false }
+    })
 
-  // ─── Lancer la simulation automatiquement ────────────────────────
-// Lancer la simulation via le moteur du registry
-useEffect(() => {
-  if (!isRunning || components.length === 0) return
-
-  // Trouver tous les moteurs capables de gérer les composants
-  const engines = registry.getAllEngines().filter(e => {
-    try { return e.canHandle(components) }
-    catch { return false }
-  })
-
-  if (engines.length === 0) {
-    console.warn('[Canvas] Aucun moteur trouvé')
-    return
-  }
-
-  const opts = buildOptions(fidelity)
-
-  const run = async () => {
-    try {
-      // Fusionner les résultats de tous les moteurs actifs
-      let merged = { rays:[], intersections:[], images:[], waveResults:{} }
-
-      for (const engine of engines) {
-        const result = await Promise.resolve(engine.run(components, opts))
-        merged.rays          = [...merged.rays,         ...(result.rays         || [])]
-        merged.intersections = [...merged.intersections,...(result.intersections || [])]
-        merged.images        = [...merged.images,       ...(result.images        || [])]
-        if (result.waveResults) {
-          merged.waveResults = { ...merged.waveResults, ...result.waveResults }
-        }
-        merged.durationMs = result.durationMs
+    for (const engine of engines) {
+      if (engine?.renderResult) {
+        engine.renderResult(ctx, results, { renderSettings, zoom })
       }
-
-      setResults(merged)
-    } catch (err) {
-      if (err.message !== 'cancelled')
-        console.warn('[Canvas] Erreur moteur :', err.message)
     }
-  }
 
-  run()
-}, [components, isRunning, fidelity])
-  // ─── Drop depuis sidebar ─────────────────────────────────────────
+    // Franges sur l'écran
+    if (results?.waveResults?.youngProfile) {
+      renderInterferenceOnScreen(ctx, components, results, 1, { x:0, y:0 })
+    }
+
+    ctx.restore()
+  }, [results, isRunning, size, zoom, pan, components, renderSettings])
+
+  // ─── Simulation auto ──────────────────────────────────────────────
+  useEffect(() => {
+    if (!isRunning || components.length === 0) return
+
+    const opts = buildOptions(fidelity)
+    const engines = registry.getAllEngines().filter(e => {
+      try { return e.canHandle(components) } catch { return false }
+    })
+
+    if (engines.length === 0) return
+
+    const run = async () => {
+      try {
+        let merged = {
+          rays:[], intersections:[], images:[],
+          waveResults:{}, quantumResults:{},
+          nuclearResults:{}, spectroResults:{},
+        }
+        for (const engine of engines) {
+          const r = await Promise.resolve(engine.run(components, opts))
+          merged.rays          = [...merged.rays,         ...(r.rays         || [])]
+          merged.intersections = [...merged.intersections,...(r.intersections || [])]
+          merged.images        = [...merged.images,       ...(r.images        || [])]
+          if (r.waveResults)   Object.assign(merged.waveResults,   r.waveResults)
+          if (r.quantumResults)Object.assign(merged.quantumResults, r.quantumResults)
+          if (r.nuclearResults)Object.assign(merged.nuclearResults, r.nuclearResults)
+          if (r.spectroResults)Object.assign(merged.spectroResults, r.spectroResults)
+          merged.durationMs = r.durationMs
+        }
+        setResults(merged)
+      } catch (err) {
+        if (err.message !== 'cancelled')
+          console.warn('[Canvas] Moteur:', err.message)
+      }
+    }
+
+    run()
+  }, [components, isRunning, fidelity])
+
+  // ─── Drop depuis sidebar ──────────────────────────────────────────
   const handleDrop = useCallback((e) => {
     e.preventDefault()
     const raw = e.dataTransfer.getData('application/luxlab')
@@ -137,11 +133,12 @@ useEffect(() => {
     addComponent(def, x, y)
   }, [zoom, pan, addComponent])
 
-  // ─── Drag composant ──────────────────────────────────────────────
+  // ─── Drag composant ───────────────────────────────────────────────
   const startDrag = useCallback((e, id) => {
     e.stopPropagation()
     setSelected(id)
     const comp = useSimStore.getState().components.find(c => c.id === id)
+    if (!comp) return
     dragging.current  = id
     dragOffset.current = {
       x: e.clientX - comp.x * zoom - pan.x,
@@ -155,38 +152,28 @@ useEffect(() => {
         x: Math.round((e.clientX - dragOffset.current.x - pan.x) / zoom),
         y: Math.round((e.clientY - dragOffset.current.y - pan.y) / zoom),
       })
-      return
     }
-    if (isPanning.current) {
-      setPan({
-        x: panStart.current.px + (e.clientX - panStart.current.mx),
-        y: panStart.current.py + (e.clientY - panStart.current.my),
-      })
+    if (isConnected) {
+      const rect = containerRef.current?.getBoundingClientRect()
+      if (rect) updateCursor(e.clientX - rect.left, e.clientY - rect.top)
     }
-  }, [zoom, pan, updateComponent, setPan])
-
-  const handleMouseDown = useCallback((e) => {
-    if (e.button === 1 || (e.button === 0 && e.altKey)) {
-      isPanning.current = true
-      panStart.current  = { mx:e.clientX, my:e.clientY, px:pan.x, py:pan.y }
-    }
-  }, [pan])
+  }, [zoom, pan, updateComponent, isConnected, updateCursor])
 
   const handleMouseUp = useCallback(() => {
-    dragging.current  = null
-    isPanning.current = false
+    dragging.current = null
   }, [])
 
   const handleWheel = useCallback((e) => {
     e.preventDefault()
-    const delta  = e.deltaY > 0 ? -0.08 : 0.08
-    setZoom(zoom + delta)
+    setZoom(zoom + (e.deltaY > 0 ? -0.08 : 0.08))
   }, [zoom, setZoom])
 
   const handleKeyDown = useCallback((e) => {
     if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
-      useSimStore.getState().removeComponent(selectedId)
-      setSelected(null)
+      if (e.target.tagName !== 'INPUT') {
+        useSimStore.getState().removeComponent(selectedId)
+        setSelected(null)
+      }
     }
   }, [selectedId, setSelected])
 
@@ -197,7 +184,6 @@ useEffect(() => {
       onDrop={handleDrop}
       onDragOver={e => e.preventDefault()}
       onMouseMove={handleMouseMove}
-      onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
       onWheel={handleWheel}
       onKeyDown={handleKeyDown}
@@ -208,11 +194,10 @@ useEffect(() => {
         overflow:   'hidden',
         background: 'var(--lb-bg)',
         outline:    'none',
-        cursor:     isPanning.current ? 'grabbing' : 'default',
       }}
     >
       {/* Grille */}
-      <Grid zoom={zoom} pan={pan}/>
+      <GridBg zoom={zoom} pan={pan}/>
 
       {/* Canvas rayons */}
       <canvas ref={canvasRef} style={{
@@ -225,11 +210,11 @@ useEffect(() => {
 
       {/* Composants SVG */}
       <svg style={{
-        position: 'absolute',
-        inset:    0,
-        width:    '100%',
-        height:   '100%',
-        overflow: 'visible',
+        position:  'absolute',
+        inset:     0,
+        width:     '100%',
+        height:    '100%',
+        overflow:  'visible',
       }}>
         <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
           {components.map(comp => {
@@ -245,17 +230,53 @@ useEffect(() => {
               />
             )
           })}
+
+          {/* Curseurs distants */}
+          {users.map(u => u.cursor && (
+            <g key={u.clientId}
+              transform={`translate(${u.cursor.x / zoom - pan.x / zoom},${u.cursor.y / zoom - pan.y / zoom})`}
+              style={{ pointerEvents:'none' }}
+            >
+              <path
+                d="M0,0 L0,14 L4,10 L7,16 L9,15 L6.5,9 L11,9 Z"
+                fill={u.color || '#2c3e50'}
+                stroke="#fff"
+                strokeWidth={0.5 / zoom}
+              />
+              <rect
+                x={12 / zoom} y={0}
+                width={(u.name?.length * 5.5 + 8) / zoom}
+                height={14 / zoom}
+                rx={3 / zoom}
+                fill={u.color || '#2c3e50'}
+              />
+              <text
+                x={16 / zoom} y={10 / zoom}
+                fontSize={8 / zoom}
+                fill="#fff"
+                fontFamily="var(--font-ui)"
+              >
+                {u.name}
+              </text>
+            </g>
+          ))}
         </g>
       </svg>
 
-      {/* Toolbar flottante */}
+      {/* Toolbar */}
       <CanvasToolbar zoom={zoom} setZoom={setZoom}/>
 
-      {/* Hint canvas vide */}
+      {/* Hint vide */}
       {components.length === 0 && <EmptyHint/>}
 
-      {/* Overlay info */}
-      <StatusOverlay components={components} isRunning={isRunning} results={results}/>
+      {/* Overlay statut */}
+      {components.length > 0 && (
+        <StatusOverlay
+          components={components}
+          isRunning={isRunning}
+          results={results}
+        />
+      )}
     </div>
   )
 }
@@ -264,16 +285,14 @@ useEffect(() => {
 
 function CompNode({ comp, def, selected, onMouseDown }) {
   const render   = def.render?.({ params: comp.params }) || {}
-  const color    = MODULE_COLORS[comp.moduleId] || '#7f8c8d'
+  const color    = getModuleColor(comp.moduleId)
   const isLens   = render.shape === 'lens'
   const isScreen = render.shape === 'screen'
+  const isMirror = render.shape === 'mirror'
   const isFilter = render.shape === 'filter'
 
-  const isMirror = render.shape === 'mirror'
-
-  // Hauteur physique proportionnelle (en pixels canvas)
-  const ry = render.height ? render.height / 2 : 36
-  const screenH = render.height ? render.height / 2 : 45
+  const ry       = render.height ? render.height / 2 : 36
+  const screenH  = render.height ? render.height / 2 : 45
 
   return (
     <g
@@ -284,7 +303,8 @@ function CompNode({ comp, def, selected, onMouseDown }) {
     >
       {selected && (
         <rect
-          x={-28} y={-(ry + 8)} width={56} height={(ry + 8) * 2}
+          x={-28} y={-(ry + 8)}
+          width={56} height={(ry + 8) * 2}
           rx={8} fill="none"
           stroke={color} strokeWidth={1}
           strokeDasharray="4 3" opacity={0.5}
@@ -292,32 +312,19 @@ function CompNode({ comp, def, selected, onMouseDown }) {
       )}
 
       {isLens ? (
-        <>
-          <ellipse
-            rx={10} ry={ry}
-            fill={`${color}18`}
-            stroke={selected ? color : `${color}99`}
-            strokeWidth={selected ? 2 : 1.5}
-          />
-          {/* Lignes de graduation */}
-          <line x1={-10} y1={0} x2={10} y2={0}
-            stroke={`${color}44`} strokeWidth={0.5}/>
-        </>
-      ) : isScreen ? (
+        <ellipse
+          rx={10} ry={ry}
+          fill={`${color}18`}
+          stroke={selected ? color : `${color}99`}
+          strokeWidth={selected ? 2 : 1.5}
+        />
+      ) : isScreen || isFilter ? (
         <rect
           x={-5} y={-screenH} width={10} height={screenH * 2} rx={2}
           fill={`${color}22`}
           stroke={selected ? color : `${color}99`}
           strokeWidth={selected ? 2 : 1.5}
         />
-
-      ) : isFilter ? (
-        <rect
-    x={-6} y={-40} width={12} height={80} rx={2}
-    fill={`${render.color}55`}
-    stroke={selected ? color : render.color}
-    strokeWidth={selected ? 2 : 1.5}
-  />
       ) : isMirror ? (
         <line
           x1={-30} y1={0} x2={30} y2={0}
@@ -334,7 +341,7 @@ function CompNode({ comp, def, selected, onMouseDown }) {
         />
       )}
 
-      {!isLens && !isScreen && !isMirror && (
+      {!isLens && !isScreen && !isMirror && !isFilter && (
         <text x={0} y={6} textAnchor="middle" fontSize={16}
           fill={color} style={{ pointerEvents:'none' }}>
           {def.icon}
@@ -342,7 +349,8 @@ function CompNode({ comp, def, selected, onMouseDown }) {
       )}
 
       <text
-        x={0} y={isLens ? ry + 12 : isScreen ? screenH + 12 : 34}
+        x={0}
+        y={isLens || isScreen || isFilter ? ry + 14 : 34}
         textAnchor="middle" fontSize={9} fill="var(--lb-muted)"
         style={{ pointerEvents:'none', fontFamily:'var(--font-mono)' }}
       >
@@ -351,9 +359,9 @@ function CompNode({ comp, def, selected, onMouseDown }) {
 
       {comp.type === 'source' && comp.params?.wavelength && (
         <text
-          x={0} y={46}
+          x={0} y={isLens || isScreen ? ry + 24 : 44}
           textAnchor="middle" fontSize={8}
-          fill={wavelengthToCSSFast(comp.params.wavelength)}
+          fill={wlToHue(comp.params.wavelength)}
           style={{ pointerEvents:'none', fontFamily:'var(--font-mono)' }}
         >
           λ={comp.params.wavelength}nm
@@ -362,7 +370,7 @@ function CompNode({ comp, def, selected, onMouseDown }) {
 
       {comp.type === 'lens' && comp.params?.focalLength && (
         <text
-          x={0} y={ry + 22}
+          x={0} y={ry + 24}
           textAnchor="middle" fontSize={8} fill="var(--lb-hint)"
           style={{ pointerEvents:'none', fontFamily:'var(--font-mono)' }}
         >
@@ -375,7 +383,7 @@ function CompNode({ comp, def, selected, onMouseDown }) {
 
 // ─── Grille ───────────────────────────────────────────────────────
 
-function Grid({ zoom, pan }) {
+function GridBg({ zoom, pan }) {
   const size = 40 * zoom
   return (
     <div style={{
@@ -389,53 +397,45 @@ function Grid({ zoom, pan }) {
       backgroundPosition: `${pan.x % size}px ${pan.y % size}px`,
       opacity:            0.7,
       pointerEvents:      'none',
-    }}
-    onMouseMove={(e) => {
-      handleMouseMove(e)
-      if (isConnected) {
-        const rect = containerRef.current?.getBoundingClientRect()
-        if (rect) updateCursor(e.clientX - rect.left, e.clientY - rect.top)
-      }
     }}/>
   )
 }
 
-// ─── Toolbar flottante ────────────────────────────────────────────
+// ─── Toolbar ─────────────────────────────────────────────────────
 
 function CanvasToolbar({ zoom, setZoom }) {
-  const tools = [
-    { label:'+', title:'Zoom avant',   action: () => setZoom(zoom + 0.1) },
-    { label:'−', title:'Zoom arrière', action: () => setZoom(zoom - 0.1) },
-    { label:'⌂', title:'Réinitialiser', action: () => setZoom(1.0) },
-  ]
   return (
     <div style={{
-      position:     'absolute',
-      bottom:       16,
-      right:        16,
-      display:      'flex',
-      flexDirection:'column',
-      gap:          4,
-      background:   'var(--lb-surface)',
-      border:       '1px solid var(--lb-border)',
-      borderRadius: 8,
-      padding:      6,
-      boxShadow:    '0 2px 8px rgba(0,0,0,.08)',
+      position:      'absolute',
+      bottom:        16,
+      right:         16,
+      display:       'flex',
+      flexDirection: 'column',
+      gap:           4,
+      background:    'var(--lb-surface)',
+      border:        '1px solid var(--lb-border)',
+      borderRadius:  8,
+      padding:       6,
+      boxShadow:     '0 2px 8px rgba(0,0,0,.08)',
     }}>
-      {tools.map(t => (
+      {[
+        { label:'+', title:'Zoom avant',    action:() => setZoom(zoom+0.1) },
+        { label:'−', title:'Zoom arrière',  action:() => setZoom(zoom-0.1) },
+        { label:'⌂', title:'Réinitialiser', action:() => setZoom(1.0)     },
+      ].map(t => (
         <button key={t.label} onClick={t.action} title={t.title} style={{
-          width:        28,
-          height:       28,
-          borderRadius: 4,
-          border:       '1px solid var(--lb-border)',
-          background:   'transparent',
-          color:        'var(--lb-muted)',
-          cursor:       'pointer',
-          fontSize:     14,
-          display:      'flex',
-          alignItems:   'center',
-          justifyContent:'center',
-          fontFamily:   'var(--font-mono)',
+          width:          28,
+          height:         28,
+          borderRadius:   4,
+          border:         '1px solid var(--lb-border)',
+          background:     'transparent',
+          color:          'var(--lb-muted)',
+          cursor:         'pointer',
+          fontSize:       14,
+          display:        'flex',
+          alignItems:     'center',
+          justifyContent: 'center',
+          fontFamily:     'var(--font-mono)',
         }}>
           {t.label}
         </button>
@@ -453,7 +453,7 @@ function CanvasToolbar({ zoom, setZoom }) {
   )
 }
 
-// ─── Hint vide ────────────────────────────────────────────────────
+// ─── Hint canvas vide ─────────────────────────────────────────────
 
 function EmptyHint() {
   return (
@@ -466,53 +466,24 @@ function EmptyHint() {
       color:          'var(--lb-hint)',
       pointerEvents:  'none',
     }}>
-      <LogoMarkHint/>
-      <div style={{ fontSize:13, marginTop:12, color:'var(--lb-muted)' }}>
+      <svg width={48} height={48} viewBox="0 0 100 100"
+        style={{ opacity:.15, display:'block', margin:'0 auto 12px' }}>
+        <rect x="10" y="10" width="25" height="25" fill="var(--lb-text)"/>
+        <path d="M 35 22.5 L 77.5 22.5 L 77.5 65"
+          fill="none" stroke="var(--lb-text)"
+          strokeWidth="4" strokeLinecap="square"/>
+        <path d="M 65 77.5 L 22.5 77.5 L 22.5 35"
+          fill="none" stroke="var(--lb-text)"
+          strokeWidth="4" strokeLinecap="square"/>
+        <rect x="65" y="65" width="25" height="25" fill="var(--lb-text)"/>
+      </svg>
+      <div style={{ fontSize:13, color:'var(--lb-muted)' }}>
         Glisse un composant depuis la sidebar
       </div>
       <div style={{ fontSize:10, marginTop:6, fontFamily:'var(--font-mono)' }}>
-        Alt+clic pour déplacer la vue · Molette pour zoomer
+        Alt+clic pour déplacer · Molette pour zoomer
       </div>
     </div>
-  )
-}
-
-function LogoMarkHint() {
-  return (
-    <svg width={48} height={48} viewBox="0 0 100 100" style={{ opacity:.15 }}>
-      <rect x="10" y="10" width="25" height="25" fill="var(--lb-text)"/>
-      <path d="M 35 22.5 L 77.5 22.5 L 77.5 65"
-        fill="none" stroke="var(--lb-text)" strokeWidth="4" strokeLinecap="square"/>
-      <path d="M 65 77.5 L 22.5 77.5 L 22.5 35"
-        fill="none" stroke="var(--lb-text)" strokeWidth="4" strokeLinecap="square"/>
-      <rect x="65" y="65" width="25" height="25" fill="var(--lb-text)"/>
-      {users.map(u => u.cursor && (
-  <g key={u.clientId}
-    transform={`translate(${u.cursor.x},${u.cursor.y})`}
-    style={{ pointerEvents:'none' }}
-  >
-    <path
-      d="M0,0 L0,14 L4,10 L7,16 L9,15 L6.5,9 L11,9 Z"
-      fill={u.color || '#2c3e50'}
-      stroke="#fff"
-      strokeWidth={0.8}
-    />
-    <rect
-      x={12} y={0} width={u.name?.length * 5.5 + 8} height={14}
-      rx={3}
-      fill={u.color || '#2c3e50'}
-    />
-    <text
-      x={16} y={10}
-      fontSize={8} fill="#fff"
-      fontFamily="var(--font-ui)"
-      style={{ pointerEvents:'none' }}
-    >
-      {u.name}
-    </text>
-  </g>
-))}
-    </svg>
   )
 }
 
@@ -534,18 +505,18 @@ function StatusOverlay({ components, isRunning, results }) {
       boxShadow:    '0 2px 8px rgba(0,0,0,.08)',
     }}>
       <div style={{
-        color:        isRunning ? 'var(--lb-success)' : 'var(--lb-muted)',
+        color:        isRunning ? '#27ae60' : 'var(--lb-muted)',
         fontWeight:   600,
         marginBottom: 4,
       }}>
         {isRunning ? '● Simulation active' : '○ En pause'}
       </div>
-      {src && (
+      {src?.params?.wavelength && (
         <div style={{ color:'var(--lb-muted)' }}>
-          λ = {src.params?.wavelength || 550} nm
+          λ = {src.params.wavelength} nm
         </div>
       )}
-      {results?.durationMs && (
+      {results?.durationMs != null && (
         <div style={{ color:'var(--lb-hint)', marginTop:2 }}>
           {results.durationMs.toFixed(1)} ms
         </div>
@@ -564,4 +535,14 @@ function buildOptions(fidelity) {
     max:      { numRays:31, rayLength:1200, aberrations:true  },
   }
   return p[fidelity] || p.standard
+}
+
+function wlToHue(wl) {
+  if (!wl) return 'var(--lb-text)'
+  if (wl < 440) return '#8e44ad'
+  if (wl < 490) return '#2980b9'
+  if (wl < 510) return '#16a085'
+  if (wl < 580) return '#27ae60'
+  if (wl < 645) return '#f39c12'
+  return '#e74c3c'
 }

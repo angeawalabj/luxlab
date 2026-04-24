@@ -5,6 +5,7 @@ mod wave;
 mod nuclear;
 mod quantum;
 mod spectro;
+mod em;
 
 use wasm_bindgen::prelude::*;
 use serde::Deserialize;
@@ -171,6 +172,14 @@ pub fn wavelength_to_color(wl: f64) -> String {
 #[wasm_bindgen]
 pub fn photon_energy_ev(wl_nm: f64) -> f64 {
     utils::wavelength::wavelength_to_ev(wl_nm)
+}
+
+#[wasm_bindgen]
+pub fn run_fdtd(params_json: &str) -> String {
+    match serde_json::from_str::<em::fdtd::FDTDParams>(params_json) {
+        Ok(p)  => ok(&em::fdtd::run_fdtd(&p)),
+        Err(e) => err("PARSE", &e.to_string()),
+    }
 }
 
 #[wasm_bindgen]

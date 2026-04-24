@@ -18,6 +18,7 @@ import init, {
   identify_element,
   get_atomic_lines,
   wavelength_to_color,
+  run_fdtd,
   photon_energy_ev,
   engine_version,
 } from '../wasm/luxlab_engine.js'
@@ -77,6 +78,7 @@ self.onmessage = async ({ data }) => {
     case 'BELL':                  call(compute_bell,            data.params);                        break
     case 'ATOMIC_SPECTRUM':       call(compute_atomic_spectrum, data.params);                        break
     case 'SOLAR_SPECTRUM':        callDirect(compute_solar_spectrum, data.steps||600);               break
+    case 'FDTD':                  {call(run_fdtd,                data.params);                        break }
     case 'FRAUNHOFER_LINES':      { const r=JSON.parse(get_fraunhofer_lines()); self.postMessage({type:'FRAUNHOFER_LINES_RESULT',id,result:r}); break }
     case 'IDENTIFY_ELEMENT':      call(identify_element,        data.params);                        break
     case 'ATOMIC_LINES':          { const r=JSON.parse(get_atomic_lines(data.element)); self.postMessage({type:'ATOMIC_LINES_RESULT',id,result:r}); break }

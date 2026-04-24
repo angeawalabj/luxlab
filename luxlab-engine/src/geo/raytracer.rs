@@ -208,7 +208,7 @@ fn get_ray_angles(
 
         "conical" => {
             // Cône d'angle alpha autour de l'axe
-            let alpha = params["coneAngle"].as_f64().unwrap_or(10.0)
+            let _alpha = params["coneAngle"].as_f64().unwrap_or(10.0)
                 * std::f64::consts::PI / 180.0;
             let spread_px = params["beamDiameter"].as_f64().unwrap_or(30.0);
             (0..n).map(|i| {
@@ -235,7 +235,7 @@ fn get_ray_angles(
                 * std::f64::consts::PI / 180.0;
             (0..n).map(|i| {
                 let t      = if n > 1 { i as f64 / (n-1) as f64 } else { 0.5 };
-                let sigma  = w0 / 2.0;
+                let _sigma  = w0 / 2.0;
                 let offset = (t - 0.5) * w0 * 2.5;
                 let angle  = if w0 > 0.0 { offset * div / w0 } else { 0.0 };
                 (offset, angle)

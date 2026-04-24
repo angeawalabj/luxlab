@@ -24,8 +24,9 @@ class SimulationBridge {
     this.#worker.onmessage = ({ data }) => this.#handleMessage(data)
 
     this.#worker.onerror = (err) => {
-      console.error('[Bridge] Worker error:', err)
-      this.#emit('error', { error: err.message })
+      console.warn('[Bridge] Worker non disponible — fallback JS actif')
+      // Ne pas bloquer l'app si le worker échoue
+      this.#emit('error', { error: err.message || 'Worker error' })
     }
   }
 
@@ -126,7 +127,7 @@ class SimulationBridge {
   getFraunhoferLines()             { return this.#request('FRAUNHOFER_LINES') }
   identifyElement(params)          { return this.#request('IDENTIFY_ELEMENT', { params }) }
   getAtomicLines(element)          { return this.#request('ATOMIC_LINES',     { element }) }
-
+  runFDTD(params) { return this.#request('FDTD', { params }) }
   // ─── Cas spécial : simulation complète ──────────────────────────
 
   async runSimulation(components, options = {}) {

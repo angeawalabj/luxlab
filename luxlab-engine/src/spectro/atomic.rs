@@ -7,7 +7,7 @@ pub struct SpectralLine {
     pub name:     String,
 }
 
-fn gaussian(wl_c: f64, i: f64, wl: f64, sigma: f64) -> f64 {
+pub fn gaussian(wl_c: f64, i: f64, wl: f64, sigma: f64) -> f64 {
     let dx = wl - wl_c;
     i * (-dx * dx / (2.0 * sigma * sigma)).exp()
 }
