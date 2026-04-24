@@ -1,14 +1,14 @@
-// ─── Bridge Worker ────────────────────────────────────────────────
-// Interface unique entre l'UI et le Web Worker WASM.
-// Gère : initialisation, file de messages, callbacks, annulation.
+// ─── SimulationBridge ─────────────────────────────────────────────
+// Interface unique entre UI et Web Worker (WASM / calculs lourds)
 
 class SimulationBridge {
   #worker      = null
   #ready       = false
-  #pending     = new Map()   // id → { resolve, reject, timestamp }
-  #listeners   = new Set()   // pour les mises à jour de statut
+  #pending     = new Map()
+  #listeners   = new Set()
   #msgCounter  = 0
-  #version = 'unknown'
+  #version     = 'unknown'
+
   constructor() {
     this.#initWorker()
   }
@@ -29,7 +29,36 @@ class SimulationBridge {
     }
   }
 
-  // ─── Réception des messages ──────────────────────────────────────
+  // ─── Core RPC (générique) ───────────────────────────────────────
+
+  #request(type, payload = {}, options = {}) {
+    const id = this.#nextId(type.toLowerCase())
+    const timeoutMs = options.timeout ?? 10000
+
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.#pending.delete(id)
+        reject(new Error(`timeout (${type})`))
+      }, timeoutMs)
+
+      this.#pending.set(id, {
+        resolve: (d) => {
+          clearTimeout(timeout)
+          resolve(d.result ?? d)
+        },
+        reject: (err) => {
+          clearTimeout(timeout)
+          reject(err)
+        },
+        timestamp: Date.now(),
+        type
+      })
+
+      this.#worker.postMessage({ type, id, ...payload })
+    })
+  }
+
+  // ─── Réception des messages ─────────────────────────────────────
 
   #handleMessage(data) {
     switch (data.type) {
@@ -44,7 +73,7 @@ class SimulationBridge {
         const cb = this.#pending.get(data.id)
         if (cb) {
           this.#pending.delete(data.id)
-          cb.resolve(data.result)
+          cb.resolve(data) // ✅ IMPORTANT (cohérent avec #request)
         }
         this.#emit('result', data)
         break
@@ -69,140 +98,91 @@ class SimulationBridge {
     }
   }
 
-  // ─── API publique ────────────────────────────────────────────────
+  // ─── API haut niveau ────────────────────────────────────────────
 
-  /**
-   * Lance une simulation.
-   * Annule automatiquement le calcul précédent en attente.
-   * @param {Object[]} components
-   * @param {Object}   options
-   * @returns {Promise<Object>} résultats de simulation
-   */
+  // Ondulatoire
+  computeYoung(params)             { return this.#request('YOUNG',   { params }) }
+  computeGrating(params)           { return this.#request('GRATING', { params }) }
+  computeMalus(params)             { return this.#request('MALUS',   { params }) }
+  computePolarizationTrain(params) { return this.#request('POLARIZATION_TRAIN', { params }) }
+  computeMichelson(params)         { return this.#request('MICHELSON', { params }) }
+
+  // Nucléaire
+  computeDecay(params)             { return this.#request('DECAY',       { params }) }
+  computeAttenuation(params)       { return this.#request('ATTENUATION', { params }) }
+  computeCompton(energy_kev, steps = 180) {
+    return this.#request('COMPTON', { energy_kev, steps })
+  }
+  computeDose(params)              { return this.#request('DOSE', { params }) }
+
+  // Quantique
+  computePhotoelectric(params)     { return this.#request('PHOTOELECTRIC', { params }) }
+  computeSchrodinger(params)       { return this.#request('SCHRODINGER',   { params }) }
+  computeBell(params)              { return this.#request('BELL',          { params }) }
+
+  // Spectroscopie
+  computeAtomicSpectrum(params)    { return this.#request('ATOMIC_SPECTRUM',  { params }) }
+  computeSolarSpectrum(steps = 600){ return this.#request('SOLAR_SPECTRUM',   { steps }) }
+  getFraunhoferLines()             { return this.#request('FRAUNHOFER_LINES') }
+  identifyElement(params)          { return this.#request('IDENTIFY_ELEMENT', { params }) }
+  getAtomicLines(element)          { return this.#request('ATOMIC_LINES',     { element }) }
+
+  // ─── Cas spécial : simulation complète ──────────────────────────
+
   async runSimulation(components, options = {}) {
-    const id = this.#nextId('sim')
+    this.cancelByPrefix('sim')
+    return this.#request('RUN', { components, options })
+  }
 
-    // Annuler tous les calculs en attente
-    this.#pending.forEach((cb, pendingId) => {
-      if (pendingId.startsWith('sim')) {
+  async getWavelengthColor(wl) {
+    return this.#request('WAVELENGTH_COLOR', { wl })
+  }
+
+  // ─── Utilitaires ────────────────────────────────────────────────
+
+  cancelByPrefix(prefix) {
+    this.#pending.forEach((cb, id) => {
+      if (id.startsWith(prefix)) {
         cb.reject(new Error('cancelled'))
-        this.#pending.delete(pendingId)
+        this.#pending.delete(id)
       }
     })
-
-    return new Promise((resolve, reject) => {
-      this.#pending.set(id, { resolve, reject, timestamp: Date.now() })
-      this.#worker.postMessage({ type: 'RUN', id, components, options })
-    })
   }
 
-  /**
-   * Récupère la couleur RGB d'une longueur d'onde.
-   * @param {number} wl — longueur d'onde en nm
-   * @returns {Promise<{r,g,b}>}
-   */
-  async getWavelengthColor(wl) {
-    const id = this.#nextId('wlc')
-    return new Promise((resolve, reject) => {
-      this.#pending.set(id, { resolve: (d) => resolve(d.color), reject })
-      this.#worker.postMessage({ type: 'WAVELENGTH_COLOR', id, wl })
-    })
-  }
-// Ajouter ces méthodes dans la classe SimulationBridge :
-
-async computeYoung(params) {
-  const id = this.#nextId('young')
-  return new Promise((resolve, reject) => {
-    this.#pending.set(id, {
-      resolve: (d) => resolve(d.result), reject
-    })
-    this.#worker.postMessage({ type:'YOUNG', id, params })
-  })
-}
-
-async computeGrating(params) {
-  const id = this.#nextId('grat')
-  return new Promise((resolve, reject) => {
-    this.#pending.set(id, {
-      resolve: (d) => resolve(d.result), reject
-    })
-    this.#worker.postMessage({ type:'GRATING', id, params })
-  })
-}
-
-async computeDecay(params) {
-  const id = this.#nextId('decay')
-  return new Promise((resolve, reject) => {
-    this.#pending.set(id, {
-      resolve: (d) => resolve(d.result), reject
-    })
-    this.#worker.postMessage({ type:'DECAY', id, params })
-  })
-}
-
-async computeAttenuation(params) {
-  const id = this.#nextId('att')
-  return new Promise((resolve, reject) => {
-    this.#pending.set(id, {
-      resolve: (d) => resolve(d.result), reject
-    })
-    this.#worker.postMessage({ type:'ATTENUATION', id, params })
-  })
-}
-
-async computeCompton(energy_kev, steps = 180) {
-  const id = this.#nextId('compton')
-  return new Promise((resolve, reject) => {
-    this.#pending.set(id, {
-      resolve: (d) => resolve(d.result), reject
-    })
-    this.#worker.postMessage({ type:'COMPTON', id, energy_kev, steps })
-  })
-}
-
-async computeDose(params) {
-  const id = this.#nextId('dose')
-  return new Promise((resolve, reject) => {
-    this.#pending.set(id, {
-      resolve: (d) => resolve(d.result), reject
-    })
-    this.#worker.postMessage({ type:'DOSE', id, params })
-  })
-}
-  /**
-   * Vérifie que le Worker est prêt.
-   */
   ping() {
     this.#worker.postMessage({ type: 'PING' })
   }
 
   get isReady() { return this.#ready }
 
-  // ─── Observers ───────────────────────────────────────────────────
+  // ─── Events ─────────────────────────────────────────────────────
 
-on(event, fn) {
-  const listener = { event, fn }
-  this.#listeners.add(listener)
+  on(event, fn) {
+    const listener = { event, fn }
+    this.#listeners.add(listener)
 
-  // Si on écoute 'ready' et que le Worker est déjà prêt → déclencher immédiatement
-  if (event === 'ready' && this.#ready) {
-    fn({ version: this.#version })
+    if (event === 'ready' && this.#ready) {
+      fn({ version: this.#version })
+    }
+
+    return () => this.#listeners.delete(listener)
   }
-
-  return () => this.#listeners.delete(listener)
-}
 
   #emit(event, data) {
     this.#listeners.forEach(l => {
-      if (l.event === event || l.event === '*') l.fn(data)
+      if (l.event === event || l.event === '*') {
+        l.fn(data)
+      }
     })
   }
 
-  // ─── Utils ───────────────────────────────────────────────────────
+  // ─── Utils internes ─────────────────────────────────────────────
 
   #nextId(prefix) {
     return `${prefix}-${++this.#msgCounter}-${Date.now()}`
   }
 }
 
-// Singleton — une seule instance dans toute l'app
+// ─── Singleton ───────────────────────────────────────────────────
+
 export const bridge = new SimulationBridge()
