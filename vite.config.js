@@ -3,16 +3,12 @@ import react            from '@vitejs/plugin-react'
 import tailwindcss      from '@tailwindcss/vite'
 
 export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss(),
-  ],
-  worker: {
-    format: 'es',
-  },
-  // Expose le dossier public/wasm sans transformation
-  assetsInclude: ['**/*.wasm'],
-  optimizeDeps: {
-    exclude: ['luxlab-engine'],
+  plugins: [ react(), tailwindcss() ],
+  worker:  { format: 'es' },
+  server:  {
+    headers: {
+      'Cross-Origin-Opener-Policy':  'same-origin',
+      'Cross-Origin-Embedder-Policy':'require-corp',
+    },
   },
 })

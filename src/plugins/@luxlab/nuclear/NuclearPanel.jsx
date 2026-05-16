@@ -2,9 +2,12 @@ import { useRef, useEffect } from 'react'
 
 export default function NuclearPanel({ results }) {
   const nr = results?.nuclearResults
-  if (!nr) return (
+  if (!nr || !nr.isotope) return (
     <div style={emptyStyle}>Lance la simulation pour voir les résultats</div>
   )
+
+  // Classification avec valeur par défaut si absente
+  const cls = nr.classification || { level:'—', color:'var(--lb-muted)' }
 
   return (
     <div style={{ padding:'10px 12px' }}>
@@ -13,19 +16,20 @@ export default function NuclearPanel({ results }) {
         <Row k="Isotope">{nr.isotope}</Row>
         <Row k="Énergie">{nr.energy_MeV} MeV</Row>
         <Row k="Débit de dose">
-          <span style={{ color: nr.classification.color, fontWeight:700 }}>
+          <span style={{ color: cls.color, fontWeight:700 }}>
             {nr.doseRate_uSvh} µSv/h
           </span>
         </Row>
         <div style={{
           marginTop:6, padding:'4px 8px', borderRadius:4,
-          background:`${nr.classification.color}18`,
-          border:`1px solid ${nr.classification.color}44`,
-          fontSize:9, color:nr.classification.color, fontWeight:600,
+          background:`${cls.color}18`,
+          border:`1px solid ${cls.color}44`,
+          fontSize:9, color:cls.color, fontWeight:600,
         }}>
-          {nr.classification.level}
+          {cls.level}
         </div>
       </Section>
+
 
       {nr.attenuationSteps?.length > 0 && (
         <Section title="BLINDAGE">

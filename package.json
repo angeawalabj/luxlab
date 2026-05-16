@@ -3,13 +3,14 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "lint": "eslint .",
+    "dev":        "vite",
+    "build":      "vite build",
     "build:wasm": "cd luxlab-engine && wasm-pack build --target web --out-dir ../src/wasm --release",
     "build:full": "npm run build:wasm && npm run build",
-    "preview": "vite preview"
+    "preview":    "vite preview",
+    "lint":       "eslint src/"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
