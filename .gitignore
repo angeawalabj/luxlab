@@ -17,3 +17,4 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*# src/wasm/
+prompt.txt
