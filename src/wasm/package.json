@@ -1,0 +1,19 @@
+{
+  "name": "luxlab-engine",
+  "type": "module",
+  "collaborators": [
+    "LuxLab"
+  ],
+  "description": "LuxLab physics engine — compiled to WebAssembly",
+  "version": "0.1.0",
+  "files": [
+    "luxlab_engine_bg.wasm",
+    "luxlab_engine.js",
+    "luxlab_engine.d.ts"
+  ],
+  "main": "luxlab_engine.js",
+  "types": "luxlab_engine.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

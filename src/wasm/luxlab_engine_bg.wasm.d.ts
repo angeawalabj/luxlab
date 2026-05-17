@@ -1,0 +1,30 @@
+/* tslint:disable */
+/* eslint-disable */
+export const memory: WebAssembly.Memory;
+export const compute_atomic_spectrum: (a: number, b: number) => [number, number];
+export const compute_attenuation: (a: number, b: number) => [number, number];
+export const compute_bell: (a: number, b: number) => [number, number];
+export const compute_compton: (a: number, b: number) => [number, number];
+export const compute_decay: (a: number, b: number) => [number, number];
+export const compute_dose: (a: number, b: number) => [number, number];
+export const compute_grating: (a: number, b: number) => [number, number];
+export const compute_malus: (a: number, b: number) => [number, number];
+export const compute_michelson: (a: number, b: number) => [number, number];
+export const compute_photoelectric: (a: number, b: number) => [number, number];
+export const compute_polarization_train: (a: number, b: number) => [number, number];
+export const compute_schrodinger: (a: number, b: number) => [number, number];
+export const compute_solar_spectrum: (a: number) => [number, number];
+export const compute_young: (a: number, b: number) => [number, number];
+export const engine_version: () => [number, number];
+export const get_atomic_lines: (a: number, b: number) => [number, number];
+export const get_fraunhofer_lines: () => [number, number];
+export const identify_element: (a: number, b: number) => [number, number];
+export const photon_energy_ev: (a: number) => number;
+export const run_fdtd: (a: number, b: number) => [number, number];
+export const run_simulation: (a: number, b: number) => [number, number];
+export const wavelength_to_color: (a: number) => [number, number];
+export const __wbindgen_externrefs: WebAssembly.Table;
+export const __wbindgen_malloc: (a: number, b: number) => number;
+export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+export const __wbindgen_free: (a: number, b: number, c: number) => void;
+export const __wbindgen_start: () => void;
